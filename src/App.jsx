@@ -348,7 +348,7 @@ function TaskDetail({ task, onClose, onUpdate, onDelete, onMarkDone, onReview, c
 // For a multi-owner project, ownerEmails is an array of emails.
 // Each owner only sees their own tasks; admins see all tasks.
 function ProjectSection({ project, tasks, onSelectTask, onDeleteProject, onAddTask, onMarkProjectDone, onReviewProject, currentUserEmail, mobile }) {
-  const [collapsed, setCollapsed] = useState(false);
+  const [collapsed, setCollapsed] = useState(true);
   const role = getRole(currentUserEmail);
   const isAdmin = role === "superadmin" || role === "head";
 
@@ -408,9 +408,9 @@ function ProjectSection({ project, tasks, onSelectTask, onDeleteProject, onAddTa
               {ownerNames.length > 0 && <span>👤 {ownerNames.join(" · ")}</span>}
               {project.assignedBy && <span style={{ color: "#3b82f6" }}> · 📌 by {project.assignedBy}</span>}
               {project.createdAt && <span> · 📅 {project.createdAt}</span>}
-              {/* Mini summary shown only when collapsed */}
+              {/* Mini summary always shown in collapsed state */}
               {collapsed && (
-                <span style={{ color: "#334155" }}>
+                <span>
                   {" · "}
                   <span style={{ color: "#94a3b8" }}>{statTasks.length} task{statTasks.length !== 1 ? "s" : ""}</span>
                   {done > 0 && <span style={{ color: "#22c55e" }}> · {done} done</span>}
