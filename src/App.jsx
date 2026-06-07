@@ -20,8 +20,7 @@ const LOWER_MANAGERS = [
   { email: "eman.r.hasan@te.eg", name: "Eman Hasan" },
 ];
 const ALLOWED_EMAILS = [
-  SUPER_ADMIN,
-  HEAD_MANAGER,
+  SUPER_ADMIN, HEAD_MANAGER,
   ...LOWER_MANAGERS.map(m => m.email),
 ];
 
@@ -31,11 +30,12 @@ const PRIORITY_COLORS = {
   Low: "#4ade80", Medium: "#facc15", High: "#f97316", Critical: "#ef4444",
 };
 const STATUS_COLORS = {
-  Pending: "#facc15", Done: "#22c55e", Overdue: "#ef4444",
+  Pending: "#facc15", Done: "#22c55e", Overdue: "#ef4444", "Under Review": "#a855f7",
 };
 
 function getTaskStatus(task) {
   if (task.status === "Done") return "Done";
+  if (task.status === "Under Review") return "Under Review";
   if (task.dueDate && new Date(task.dueDate) < new Date()) return "Overdue";
   return "Pending";
 }
@@ -84,7 +84,7 @@ function AuthScreen() {
             uid: cred.user.uid, email: email.trim().toLowerCase(),
             name: name.trim(), role,
           });
-        } catch (e) { console.log("profile save error", e); }
+        } catch (e) { console.log("profile error", e); }
       }
     } catch (e) {
       if (e.code === "auth/email-already-in-use") setError("Already registered — please Sign In.");
@@ -102,7 +102,7 @@ function AuthScreen() {
       await sendPasswordResetEmail(auth, resetEmail.trim());
       setSuccess("Reset email sent! Check your inbox.");
       setShowReset(false);
-    } catch (e) { setError("Could not send reset email. Check the address."); }
+    } catch (e) { setError("Could not send reset email."); }
   };
 
   return (
@@ -113,7 +113,6 @@ function AuthScreen() {
           <div style={{ fontSize: "22px", fontWeight: 800, color: "#f1f5f9" }}>WE Telecom Egypt</div>
           <div style={{ fontSize: "11px", color: "#3b82f6", letterSpacing: "2px", textTransform: "uppercase", marginTop: "4px" }}>Task Management System</div>
         </div>
-
         <div style={{ background: "linear-gradient(135deg,#0f1724,#111e30)", border: "1px solid #1e3a5f", borderRadius: "20px", padding: "28px 24px" }}>
           <div style={{ display: "flex", marginBottom: "24px", background: "#0a1120", borderRadius: "10px", padding: "4px" }}>
             {["login", "signup"].map(m => (
@@ -122,7 +121,6 @@ function AuthScreen() {
               </button>
             ))}
           </div>
-
           {!showReset ? (
             <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
               {mode === "signup" && <input style={inputStyle} placeholder="Full Name" value={name} onChange={e => setName(e.target.value)} />}
@@ -139,8 +137,8 @@ function AuthScreen() {
             <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
               <div style={{ color: "#94a3b8", fontSize: "13px", textAlign: "center" }}>Enter your email to receive a reset link</div>
               <input style={inputStyle} placeholder="Your work email" type="email" value={resetEmail} onChange={e => setResetEmail(e.target.value)} />
-              {error && <div style={{ color: "#ef4444", fontSize: "12px", padding: "10px 12px", background: "#1a0a0a", borderRadius: "8px" }}>{error}</div>}
-              {success && <div style={{ color: "#22c55e", fontSize: "12px", padding: "10px 12px", background: "#0a1a0a", borderRadius: "8px" }}>{success}</div>}
+              {error && <div style={{ color: "#ef4444", fontSize: "12px", padding: "10px", background: "#1a0a0a", borderRadius: "8px" }}>{error}</div>}
+              {success && <div style={{ color: "#22c55e", fontSize: "12px", padding: "10px", background: "#0a1a0a", borderRadius: "8px" }}>{success}</div>}
               <button onClick={sendReset} style={{ background: "linear-gradient(135deg,#1d4ed8,#2563eb)", color: "#fff", border: "none", borderRadius: "10px", padding: "13px", cursor: "pointer", fontFamily: "'Sora',sans-serif", fontWeight: 700, fontSize: "14px" }}>Send Reset Email</button>
               <button onClick={() => { setShowReset(false); setError(""); }} style={{ background: "none", border: "none", color: "#64748b", cursor: "pointer", fontSize: "12px", fontFamily: "'Sora',sans-serif" }}>← Back to Sign In</button>
             </div>
@@ -167,65 +165,118 @@ function Modal({ title, onClose, children }) {
   );
 }
 
+// ─── CONFIRM MODAL ────────────────────────────────────────────────────────────
+function ConfirmModal({ title, message, onConfirm, onCancel, confirmLabel = "Confirm", confirmColor = "#22c55e" }) {
+  return (
+    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.85)", zIndex: 2000, display: "flex", alignItems: "center", justifyContent: "center", padding: "16px", backdropFilter: "blur(4px)" }}>
+      <div style={{ background: "#0f1724", border: "1px solid #1e3a5f", borderRadius: "16px", width: "100%", maxWidth: "400px", padding: "24px", boxShadow: "0 25px 60px rgba(0,0,0,0.6)" }}>
+        <div style={{ fontSize: "18px", fontWeight: 800, color: "#f1f5f9", marginBottom: "12px" }}>{title}</div>
+        <div style={{ fontSize: "14px", color: "#94a3b8", marginBottom: "24px", lineHeight: 1.5 }}>{message}</div>
+        <div style={{ display: "flex", gap: "10px" }}>
+          <button onClick={onCancel} style={{ flex: 1, background: "#0a1120", color: "#94a3b8", border: "1px solid #1e3a5f", borderRadius: "10px", padding: "11px", cursor: "pointer", fontFamily: "'Sora',sans-serif", fontWeight: 600, fontSize: "13px" }}>Cancel</button>
+          <button onClick={onConfirm} style={{ flex: 1, background: confirmColor, color: "#fff", border: "none", borderRadius: "10px", padding: "11px", cursor: "pointer", fontFamily: "'Sora',sans-serif", fontWeight: 700, fontSize: "13px" }}>{confirmLabel}</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── TASK CARD ────────────────────────────────────────────────────────────────
-function TaskCard({ task, onOpen }) {
+function TaskCard({ task, onOpen, onMarkDone, onReview, currentUserEmail }) {
   const status = getTaskStatus(task);
   const done = (task.checklist || []).filter(c => c.done).length;
   const total = (task.checklist || []).length;
   const pct = total ? Math.round((done / total) * 100) : 0;
+  const role = getRole(currentUserEmail);
+  const isAdmin = role === "superadmin" || role === "head";
+  const canMarkDone = status === "Pending" || status === "Overdue";
+  const canReview = isAdmin && status === "Done";
+
   return (
-    <div onClick={() => onOpen(task)} style={{ background: "linear-gradient(135deg,#0f1724,#111e30)", border: `1px solid ${status === "Overdue" ? "#7f1d1d" : "#1e3a5f"}`, borderRadius: "12px", padding: "14px 16px", cursor: "pointer", transition: "all 0.2s" }}
-      onMouseEnter={e => e.currentTarget.style.transform = "translateY(-2px)"}
-      onMouseLeave={e => e.currentTarget.style.transform = "translateY(0)"}>
-      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "8px" }}>
-        <span style={{ color: PRIORITY_COLORS[task.priority] || "#facc15", fontSize: "10px", fontWeight: 700, textTransform: "uppercase", background: (PRIORITY_COLORS[task.priority] || "#facc15") + "18", padding: "3px 8px", borderRadius: "20px" }}>{task.priority || "Medium"}</span>
-        <span style={{ color: STATUS_COLORS[status], fontSize: "10px", fontWeight: 700 }}>● {status}</span>
-      </div>
-      <div style={{ color: "#e2e8f0", fontWeight: 600, fontSize: "13px", marginBottom: "8px", lineHeight: 1.4 }}>{task.title}</div>
-      {task.dueDate && <div style={{ color: status === "Overdue" ? "#ef4444" : "#64748b", fontSize: "11px", marginBottom: total > 0 ? "10px" : 0 }}>📅 {task.dueDate}</div>}
-      {task.assignedBy && <div style={{ color: "#475569", fontSize: "10px", marginBottom: total > 0 ? "8px" : 0 }}>📌 Assigned by {task.assignedBy}</div>}
-      {total > 0 && (
-        <div>
-          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "4px" }}>
-            <span style={{ color: "#94a3b8", fontSize: "11px" }}>Checklist</span>
-            <span style={{ color: "#94a3b8", fontSize: "11px" }}>{done}/{total}</span>
-          </div>
-          <div style={{ background: "#1e3a5f", borderRadius: "99px", height: "4px" }}>
-            <div style={{ width: `${pct}%`, height: "4px", borderRadius: "99px", background: pct === 100 ? "#22c55e" : "linear-gradient(90deg,#3b82f6,#60a5fa)" }} />
-          </div>
+    <div style={{ background: "linear-gradient(135deg,#0f1724,#111e30)", border: `1px solid ${status === "Overdue" ? "#7f1d1d" : status === "Under Review" ? "#6b21a8" : status === "Done" ? "#14532d" : "#1e3a5f"}`, borderRadius: "12px", padding: "14px 16px", transition: "all 0.2s" }}>
+      <div onClick={() => onOpen(task)} style={{ cursor: "pointer" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "8px" }}>
+          <span style={{ color: PRIORITY_COLORS[task.priority] || "#facc15", fontSize: "10px", fontWeight: 700, textTransform: "uppercase", background: (PRIORITY_COLORS[task.priority] || "#facc15") + "18", padding: "3px 8px", borderRadius: "20px" }}>{task.priority || "Medium"}</span>
+          <span style={{ color: STATUS_COLORS[status] || "#64748b", fontSize: "10px", fontWeight: 700 }}>● {status}</span>
         </div>
-      )}
+        <div style={{ color: "#e2e8f0", fontWeight: 600, fontSize: "13px", marginBottom: "8px", lineHeight: 1.4 }}>{task.title}</div>
+        {task.dueDate && <div style={{ color: status === "Overdue" ? "#ef4444" : "#64748b", fontSize: "11px", marginBottom: "6px" }}>📅 {task.dueDate}</div>}
+        {task.assignedBy && <div style={{ color: "#475569", fontSize: "10px", marginBottom: "8px" }}>📌 by {task.assignedBy}</div>}
+        {total > 0 && (
+          <div style={{ marginBottom: "10px" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "4px" }}>
+              <span style={{ color: "#94a3b8", fontSize: "11px" }}>Checklist</span>
+              <span style={{ color: "#94a3b8", fontSize: "11px" }}>{done}/{total}</span>
+            </div>
+            <div style={{ background: "#1e3a5f", borderRadius: "99px", height: "4px" }}>
+              <div style={{ width: `${pct}%`, height: "4px", borderRadius: "99px", background: pct === 100 ? "#22c55e" : "linear-gradient(90deg,#3b82f6,#60a5fa)" }} />
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Action Buttons */}
+      <div style={{ display: "flex", gap: "6px", marginTop: "8px" }}>
+        {canMarkDone && (
+          <button onClick={e => { e.stopPropagation(); onMarkDone(task); }}
+            style={{ flex: 1, background: "#14532d", color: "#22c55e", border: "1px solid #22c55e40", borderRadius: "8px", padding: "6px", cursor: "pointer", fontSize: "11px", fontWeight: 700 }}>
+            ✅ Mark Done
+          </button>
+        )}
+        {status === "Done" && !isAdmin && (
+          <div style={{ flex: 1, background: "#0a1a0a", color: "#22c55e", border: "1px solid #14532d", borderRadius: "8px", padding: "6px", fontSize: "11px", fontWeight: 600, textAlign: "center" }}>
+            ✅ Completed
+          </div>
+        )}
+        {canReview && (
+          <>
+            <button onClick={e => { e.stopPropagation(); onReview(task, "approve"); }}
+              style={{ flex: 1, background: "#14532d", color: "#22c55e", border: "1px solid #22c55e40", borderRadius: "8px", padding: "6px", cursor: "pointer", fontSize: "11px", fontWeight: 700 }}>
+              ✅ Pass
+            </button>
+            <button onClick={e => { e.stopPropagation(); onReview(task, "reject"); }}
+              style={{ flex: 1, background: "#1a0a0a", color: "#ef4444", border: "1px solid #7f1d1d40", borderRadius: "8px", padding: "6px", cursor: "pointer", fontSize: "11px", fontWeight: 700 }}>
+              ❌ Reject
+            </button>
+          </>
+        )}
+        {status === "Under Review" && (
+          <div style={{ flex: 1, background: "#1a0a28", color: "#a855f7", border: "1px solid #6b21a840", borderRadius: "8px", padding: "6px", fontSize: "11px", fontWeight: 600, textAlign: "center" }}>
+            🔍 Under Review
+          </div>
+        )}
+      </div>
     </div>
   );
 }
 
 // ─── TASK DETAIL ──────────────────────────────────────────────────────────────
-function TaskDetail({ task, onClose, onUpdate, onDelete, currentUserEmail }) {
+function TaskDetail({ task, onClose, onUpdate, onDelete, onMarkDone, onReview, currentUserEmail }) {
   const [localTask, setLocalTask] = useState({ ...task, checklist: (task.checklist || []).map(c => ({ ...c })) });
   const [newItem, setNewItem] = useState("");
   const status = getTaskStatus(localTask);
-  const inputStyle = { background: "#0a1120", border: "1px solid #1e3a5f", borderRadius: "8px", color: "#e2e8f0", padding: "8px 12px", fontSize: "13px", width: "100%", outline: "none", fontFamily: "'Sora',sans-serif", boxSizing: "border-box" };
-  const labelStyle = { color: "#64748b", fontSize: "11px", letterSpacing: "0.8px", textTransform: "uppercase", marginBottom: "6px", display: "block" };
-
   const role = getRole(currentUserEmail);
   const isAdmin = role === "superadmin" || role === "head";
   const isOwner = task.ownerEmail?.toLowerCase() === currentUserEmail?.toLowerCase();
   const isAssignedByMe = task.assignedByEmail?.toLowerCase() === currentUserEmail?.toLowerCase();
-  const canDelete = isAdmin || isOwner || isAssignedByMe;
+  const canDelete = isAdmin || (isOwner && !task.assignedBy) || isAssignedByMe;
   const canEdit = isAdmin || isOwner;
-  // Lower manager can mark checklist done even on assigned tasks
-  const canCheckList = isAdmin || isOwner || task.ownerEmail?.toLowerCase() === currentUserEmail?.toLowerCase() ||
-    task.assignedToEmail?.toLowerCase() === currentUserEmail?.toLowerCase();
+  const canMarkDone = (status === "Pending" || status === "Overdue") && (isAdmin || isOwner || task.assignedToEmail?.toLowerCase() === currentUserEmail?.toLowerCase());
+  const canReview = isAdmin && status === "Done";
+
+  const inputStyle = { background: "#0a1120", border: "1px solid #1e3a5f", borderRadius: "8px", color: "#e2e8f0", padding: "8px 12px", fontSize: "13px", width: "100%", outline: "none", fontFamily: "'Sora',sans-serif", boxSizing: "border-box" };
+  const labelStyle = { color: "#64748b", fontSize: "11px", letterSpacing: "0.8px", textTransform: "uppercase", marginBottom: "6px", display: "block" };
 
   return (
-    <Modal title="Task Details" onClose={() => { onUpdate(localTask); onClose(); }}>
+    <Modal title="Task Details" onClose={() => { if (canEdit) onUpdate(localTask); onClose(); }}>
       <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
         <div style={{ textAlign: "center" }}>
-          <span style={{ color: STATUS_COLORS[status], background: STATUS_COLORS[status] + "18", padding: "6px 20px", borderRadius: "20px", fontSize: "12px", fontWeight: 700, border: `1px solid ${STATUS_COLORS[status]}40` }}>● {status}</span>
+          <span style={{ color: STATUS_COLORS[status] || "#64748b", background: (STATUS_COLORS[status] || "#64748b") + "18", padding: "6px 20px", borderRadius: "20px", fontSize: "12px", fontWeight: 700, border: `1px solid ${(STATUS_COLORS[status] || "#64748b")}40` }}>● {status}</span>
         </div>
 
         <div><label style={labelStyle}>Title</label>
-          {canEdit ? <input style={inputStyle} value={localTask.title} onChange={e => setLocalTask(t => ({ ...t, title: e.target.value }))} />
+          {canEdit
+            ? <input style={inputStyle} value={localTask.title} onChange={e => setLocalTask(t => ({ ...t, title: e.target.value }))} />
             : <div style={{ color: "#e2e8f0", fontSize: "14px", fontWeight: 600 }}>{localTask.title}</div>}
         </div>
 
@@ -257,8 +308,8 @@ function TaskDetail({ task, onClose, onUpdate, onDelete, currentUserEmail }) {
             {(localTask.checklist || []).map(item => (
               <div key={item.id} style={{ display: "flex", alignItems: "center", gap: "10px", background: "#0a1120", borderRadius: "8px", padding: "8px 12px", border: "1px solid #1e3a5f" }}>
                 <input type="checkbox" checked={item.done}
-                  onChange={() => canCheckList && setLocalTask(t => ({ ...t, checklist: t.checklist.map(c => c.id === item.id ? { ...c, done: !c.done } : c) }))}
-                  style={{ accentColor: "#3b82f6", width: "15px", height: "15px", cursor: canCheckList ? "pointer" : "default", flexShrink: 0 }} />
+                  onChange={() => setLocalTask(t => ({ ...t, checklist: t.checklist.map(c => c.id === item.id ? { ...c, done: !c.done } : c) }))}
+                  style={{ accentColor: "#3b82f6", width: "15px", height: "15px", cursor: "pointer", flexShrink: 0 }} />
                 <span style={{ color: item.done ? "#475569" : "#cbd5e1", fontSize: "13px", flex: 1, textDecoration: item.done ? "line-through" : "none" }}>{item.text}</span>
                 {canEdit && <button onClick={() => setLocalTask(t => ({ ...t, checklist: t.checklist.filter(c => c.id !== item.id) }))} style={{ background: "none", border: "none", color: "#475569", cursor: "pointer", fontSize: "14px" }}>✕</button>}
               </div>
@@ -275,9 +326,14 @@ function TaskDetail({ task, onClose, onUpdate, onDelete, currentUserEmail }) {
           )}
         </div>
 
-        <div style={{ display: "flex", gap: "10px" }}>
-          <button onClick={() => { onUpdate(localTask); onClose(); }} style={{ flex: 1, background: "linear-gradient(135deg,#1d4ed8,#2563eb)", color: "#fff", border: "none", borderRadius: "10px", padding: "11px", cursor: "pointer", fontWeight: 700, fontSize: "13px" }}>Save</button>
-          {canDelete && <button onClick={() => { onDelete(task.id); onClose(); }} style={{ background: "#1a0a0a", color: "#ef4444", border: "1px solid #7f1d1d", borderRadius: "10px", padding: "11px 16px", cursor: "pointer", fontWeight: 600, fontSize: "13px" }}>Delete</button>}
+        <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+          {canEdit && <button onClick={() => { onUpdate(localTask); onClose(); }} style={{ flex: 1, background: "linear-gradient(135deg,#1d4ed8,#2563eb)", color: "#fff", border: "none", borderRadius: "10px", padding: "11px", cursor: "pointer", fontWeight: 700, fontSize: "13px" }}>Save</button>}
+          {canMarkDone && <button onClick={() => { onMarkDone(task); onClose(); }} style={{ flex: 1, background: "#14532d", color: "#22c55e", border: "1px solid #22c55e40", borderRadius: "10px", padding: "11px", cursor: "pointer", fontWeight: 700, fontSize: "13px" }}>✅ Mark Done</button>}
+          {canReview && <>
+            <button onClick={() => { onReview(task, "approve"); onClose(); }} style={{ flex: 1, background: "#14532d", color: "#22c55e", border: "1px solid #22c55e40", borderRadius: "10px", padding: "11px", cursor: "pointer", fontWeight: 700, fontSize: "13px" }}>✅ Pass</button>
+            <button onClick={() => { onReview(task, "reject"); onClose(); }} style={{ flex: 1, background: "#1a0a0a", color: "#ef4444", border: "1px solid #7f1d1d", borderRadius: "10px", padding: "11px", cursor: "pointer", fontWeight: 700, fontSize: "13px" }}>❌ Reject</button>
+          </>}
+          {canDelete && <button onClick={() => { onDelete(task.id); onClose(); }} style={{ background: "#1a0a0a", color: "#ef4444", border: "1px solid #7f1d1d", borderRadius: "10px", padding: "11px 14px", cursor: "pointer", fontWeight: 600, fontSize: "13px" }}>🗑</button>}
         </div>
       </div>
     </Modal>
@@ -285,40 +341,73 @@ function TaskDetail({ task, onClose, onUpdate, onDelete, currentUserEmail }) {
 }
 
 // ─── PROJECT SECTION ──────────────────────────────────────────────────────────
-function ProjectSection({ project, tasks, onSelectTask, onDeleteProject, onAddTask, currentUserEmail, mobile }) {
+function ProjectSection({ project, tasks, onSelectTask, onDeleteProject, onAddTask, onMarkProjectDone, onReviewProject, currentUserEmail, mobile }) {
   const role = getRole(currentUserEmail);
   const isAdmin = role === "superadmin" || role === "head";
-  const canDeleteProject = isAdmin
-    ? true
-    : project.ownerEmail?.toLowerCase() === currentUserEmail?.toLowerCase() && !project.assignedBy;
+  const isOwner = project.ownerEmail?.toLowerCase() === currentUserEmail?.toLowerCase();
+  const isAssignedByMe = project.assignedByEmail?.toLowerCase() === currentUserEmail?.toLowerCase();
+  const canDeleteProject = isAdmin || (isOwner && !project.assignedBy);
+  const canAddTask = isAdmin || isOwner;
 
   const ptasks = tasks.filter(t => t.projectId === project.id);
   const done = ptasks.filter(t => getTaskStatus(t) === "Done").length;
   const overdue = ptasks.filter(t => getTaskStatus(t) === "Overdue").length;
   const pending = ptasks.filter(t => getTaskStatus(t) === "Pending").length;
+  const underReview = ptasks.filter(t => getTaskStatus(t) === "Under Review").length;
   const pct = ptasks.length ? Math.round((done / ptasks.length) * 100) : 0;
 
+  const projectStatus = project.status || "Pending";
+  const canMarkProjectDone = (isAdmin || isOwner) && projectStatus === "Pending";
+  const canReviewProject = isAdmin && projectStatus === "Done";
+
+  const borderColor = projectStatus === "Done" ? "#14532d" : projectStatus === "Under Review" ? "#6b21a8" : "#1e3a5f";
+
   return (
-    <div style={{ background: "linear-gradient(135deg,#0f1724,#111e30)", border: "1px solid #1e3a5f", borderRadius: "16px", padding: "20px", marginBottom: "16px" }}>
+    <div style={{ background: "linear-gradient(135deg,#0f1724,#111e30)", border: `1px solid ${borderColor}`, borderRadius: "16px", padding: "20px", marginBottom: "16px" }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "12px", flexWrap: "wrap", gap: "8px" }}>
         <div>
-          <div style={{ fontSize: "16px", fontWeight: 800, color: "#f1f5f9" }}>{project.name}</div>
-          <div style={{ fontSize: "11px", color: "#64748b", marginTop: "3px" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
+            <div style={{ fontSize: "16px", fontWeight: 800, color: "#f1f5f9" }}>{project.name}</div>
+            <span style={{ color: STATUS_COLORS[projectStatus] || "#64748b", background: (STATUS_COLORS[projectStatus] || "#64748b") + "18", padding: "3px 10px", borderRadius: "20px", fontSize: "10px", fontWeight: 700, border: `1px solid ${(STATUS_COLORS[projectStatus] || "#64748b")}30` }}>● {projectStatus}</span>
+          </div>
+          <div style={{ fontSize: "11px", color: "#64748b", marginTop: "4px" }}>
             {project.ownerName && `👤 ${project.ownerName}`}
             {project.assignedBy && <span style={{ color: "#3b82f6" }}> · 📌 by {project.assignedBy}</span>}
             {project.createdAt && ` · 📅 ${project.createdAt}`}
           </div>
         </div>
-        <div style={{ display: "flex", gap: "8px" }}>
-          {(isAdmin || project.ownerEmail?.toLowerCase() === currentUserEmail?.toLowerCase()) &&
-            <button onClick={() => onAddTask(project)} style={{ background: "linear-gradient(135deg,#1d4ed8,#2563eb)", color: "#fff", border: "none", borderRadius: "10px", padding: "7px 14px", cursor: "pointer", fontWeight: 700, fontSize: "12px" }}>+ Task</button>}
-          {canDeleteProject &&
-            <button onClick={() => onDeleteProject(project.id)} style={{ background: "#1a0a0a", color: "#ef4444", border: "1px solid #7f1d1d", borderRadius: "10px", padding: "7px 12px", cursor: "pointer", fontSize: "13px" }}>🗑</button>}
+        <div style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>
+          {canAddTask && projectStatus === "Pending" && (
+            <button onClick={() => onAddTask(project)} style={{ background: "linear-gradient(135deg,#1d4ed8,#2563eb)", color: "#fff", border: "none", borderRadius: "8px", padding: "7px 12px", cursor: "pointer", fontWeight: 700, fontSize: "11px" }}>+ Task</button>
+          )}
+          {canMarkProjectDone && (
+            <button onClick={() => onMarkProjectDone(project)} style={{ background: "#14532d", color: "#22c55e", border: "1px solid #22c55e40", borderRadius: "8px", padding: "7px 12px", cursor: "pointer", fontWeight: 700, fontSize: "11px" }}>✅ Mark Done</button>
+          )}
+          {canReviewProject && (
+            <>
+              <button onClick={() => onReviewProject(project, "approve")} style={{ background: "#14532d", color: "#22c55e", border: "1px solid #22c55e40", borderRadius: "8px", padding: "7px 12px", cursor: "pointer", fontWeight: 700, fontSize: "11px" }}>✅ Pass</button>
+              <button onClick={() => onReviewProject(project, "reject")} style={{ background: "#1a0a0a", color: "#ef4444", border: "1px solid #7f1d1d40", borderRadius: "8px", padding: "7px 12px", cursor: "pointer", fontWeight: 700, fontSize: "11px" }}>❌ Reject</button>
+            </>
+          )}
+          {projectStatus === "Done" && !isAdmin && (
+            <div style={{ background: "#0a1a0a", color: "#22c55e", border: "1px solid #14532d", borderRadius: "8px", padding: "7px 12px", fontSize: "11px", fontWeight: 600 }}>✅ Completed</div>
+          )}
+          {projectStatus === "Under Review" && (
+            <div style={{ background: "#1a0a28", color: "#a855f7", border: "1px solid #6b21a840", borderRadius: "8px", padding: "7px 12px", fontSize: "11px", fontWeight: 600 }}>🔍 Under Review</div>
+          )}
+          {canDeleteProject && (
+            <button onClick={() => onDeleteProject(project.id)} style={{ background: "#1a0a0a", color: "#ef4444", border: "1px solid #7f1d1d", borderRadius: "8px", padding: "7px 10px", cursor: "pointer", fontSize: "13px" }}>🗑</button>
+          )}
         </div>
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: "8px", marginBottom: "14px" }}>
-        {[{ label: "Pending", value: pending, color: "#facc15", icon: "⏳" }, { label: "Done", value: done, color: "#22c55e", icon: "✅" }, { label: "Overdue", value: overdue, color: "#ef4444", icon: "🔴" }].map(s => (
+      <div style={{ display: "grid", gridTemplateColumns: `repeat(${underReview > 0 ? 4 : 3},1fr)`, gap: "8px", marginBottom: "14px" }}>
+        {[
+          { label: "Pending", value: pending, color: "#facc15", icon: "⏳" },
+          { label: "Done", value: done, color: "#22c55e", icon: "✅" },
+          { label: "Overdue", value: overdue, color: "#ef4444", icon: "🔴" },
+          ...(underReview > 0 ? [{ label: "Review", value: underReview, color: "#a855f7", icon: "🔍" }] : []),
+        ].map(s => (
           <div key={s.label} style={{ background: "#0a1120", borderRadius: "10px", padding: "10px", display: "flex", alignItems: "center", gap: "8px", border: "1px solid #1e3a5f" }}>
             <span>{s.icon}</span>
             <div><div style={{ fontSize: "18px", fontWeight: 800, color: s.color }}>{s.value}</div><div style={{ fontSize: "10px", color: "#64748b" }}>{s.label}</div></div>
@@ -337,8 +426,21 @@ function ProjectSection({ project, tasks, onSelectTask, onDeleteProject, onAddTa
       </div>
 
       <div style={{ display: "grid", gridTemplateColumns: mobile ? "1fr" : "repeat(auto-fill,minmax(220px,1fr))", gap: "8px" }}>
-        {ptasks.map(t => <TaskCard key={t.id} task={t} onOpen={onSelectTask} />)}
-        {ptasks.length === 0 && <div style={{ color: "#334155", fontSize: "12px", padding: "16px", textAlign: "center", border: "2px dashed #1e3a5f", borderRadius: "10px" }}>No tasks yet</div>}
+        {ptasks.map(t => (
+          <TaskCard key={t.id} task={t} onOpen={onSelectTask}
+            onMarkDone={async (task) => {
+              await updateDoc(doc(db, "tasks", task.id), { status: "Done", doneAt: new Date().toISOString() });
+            }}
+            onReview={async (task, action) => {
+              if (action === "approve") await deleteDoc(doc(db, "tasks", task.id));
+              else await updateDoc(doc(db, "tasks", task.id), { status: "Pending" });
+            }}
+            currentUserEmail={currentUserEmail}
+          />
+        ))}
+        {ptasks.length === 0 && (
+          <div style={{ color: "#334155", fontSize: "12px", padding: "20px", textAlign: "center", border: "2px dashed #1e3a5f", borderRadius: "10px" }}>No tasks yet</div>
+        )}
       </div>
     </div>
   );
@@ -354,6 +456,7 @@ function ManagerDashboard({ user, userProfile }) {
   const [newProjectName, setNewProjectName] = useState("");
   const [newTask, setNewTask] = useState({ title: "", priority: "Medium", dueDate: "" });
   const [mobile, setMobile] = useState(isMobile());
+  const [confirm, setConfirm] = useState(null);
 
   useEffect(() => {
     const handleResize = () => setMobile(isMobile());
@@ -371,6 +474,7 @@ function ManagerDashboard({ user, userProfile }) {
       name: newProjectName.trim(), ownerUid: user.uid,
       ownerName: userProfile?.name || user.email,
       ownerEmail: user.email.toLowerCase(),
+      status: "Pending",
       createdAt: new Date().toISOString().slice(0, 10),
     });
     setNewProjectName(""); setShowNewProject(false);
@@ -391,6 +495,26 @@ function ManagerDashboard({ user, userProfile }) {
   const updateTask = async (updated) => {
     const { id, ...data } = updated;
     await updateDoc(doc(db, "tasks", id), { ...data, status: getTaskStatus(updated) });
+  };
+
+  const markTaskDone = async (task) => {
+    await updateDoc(doc(db, "tasks", task.id), { status: "Done", doneAt: new Date().toISOString() });
+  };
+
+  const reviewTask = async (task, action) => {
+    if (action === "approve") await deleteDoc(doc(db, "tasks", task.id));
+    else await updateDoc(doc(db, "tasks", task.id), { status: "Pending" });
+  };
+
+  const markProjectDone = (project) => {
+    setConfirm({
+      title: "Mark Project as Done?",
+      message: `Are you sure you want to mark "${project.name}" as done? It will be sent for review.`,
+      onConfirm: async () => {
+        await updateDoc(doc(db, "projects", project.id), { status: "Done", doneAt: new Date().toISOString() });
+        setConfirm(null);
+      },
+    });
   };
 
   const deleteTask = async (id) => await deleteDoc(doc(db, "tasks", id));
@@ -416,7 +540,7 @@ function ManagerDashboard({ user, userProfile }) {
           </div>
           <div style={{ display: "flex", gap: "8px" }}>
             <button onClick={() => setShowNewProject(true)} style={{ background: "linear-gradient(135deg,#1d4ed8,#2563eb)", color: "#fff", border: "none", borderRadius: "8px", padding: "7px 14px", cursor: "pointer", fontWeight: 700, fontSize: "12px" }}>+ Project</button>
-            <button onClick={() => signOut(auth)} style={{ background: "#0f1724", color: "#94a3b8", border: "1px solid #1e3a5f", borderRadius: "8px", padding: "7px 14px", cursor: "pointer", fontSize: "12px", fontWeight: 600 }}>Sign Out</button>
+            <button onClick={() => signOut(auth)} style={{ background: "#0f1724", color: "#94a3b8", border: "1px solid #1e3a5f", borderRadius: "8px", padding: "7px 14px", cursor: "pointer", fontSize: "12px" }}>Sign Out</button>
           </div>
         </div>
       </div>
@@ -430,9 +554,10 @@ function ManagerDashboard({ user, userProfile }) {
           </div>
         ) : (
           projects.map(project => (
-            <ProjectSection key={project.id} project={project} tasks={tasks} onSelectTask={setSelectedTask}
-              onDeleteProject={deleteProject} onAddTask={setNewTaskProject}
-              currentUserEmail={user.email} mobile={mobile} />
+            <ProjectSection key={project.id} project={project} tasks={tasks}
+              onSelectTask={setSelectedTask} onDeleteProject={deleteProject}
+              onAddTask={setNewTaskProject} onMarkProjectDone={markProjectDone}
+              onReviewProject={() => {}} currentUserEmail={user.email} mobile={mobile} />
           ))
         )}
       </div>
@@ -465,25 +590,35 @@ function ManagerDashboard({ user, userProfile }) {
         </Modal>
       )}
 
-      {selectedTask && <TaskDetail task={selectedTask} onClose={() => setSelectedTask(null)} onUpdate={updateTask} onDelete={deleteTask} currentUserEmail={user.email} />}
+      {selectedTask && (
+        <TaskDetail task={selectedTask} onClose={() => setSelectedTask(null)}
+          onUpdate={updateTask} onDelete={deleteTask}
+          onMarkDone={markTaskDone} onReview={reviewTask}
+          currentUserEmail={user.email} />
+      )}
+
+      {confirm && (
+        <ConfirmModal title={confirm.title} message={confirm.message}
+          onConfirm={confirm.onConfirm} onCancel={() => setConfirm(null)}
+          confirmLabel="Yes, Mark Done" confirmColor="#22c55e" />
+      )}
     </div>
   );
 }
 
-// ─── ADMIN / HEAD DASHBOARD ───────────────────────────────────────────────────
+// ─── ADMIN DASHBOARD ──────────────────────────────────────────────────────────
 function AdminDashboard({ user, role }) {
   const [allProjects, setAllProjects] = useState([]);
   const [allTasks, setAllTasks] = useState([]);
   const [selectedManagerEmail, setSelectedManagerEmail] = useState("all");
   const [selectedTask, setSelectedTask] = useState(null);
   const [showNewProject, setShowNewProject] = useState(false);
-  const [showNewTask, setShowNewTask] = useState(false);
   const [newTaskProject, setNewTaskProject] = useState(null);
   const [newProjectName, setNewProjectName] = useState("");
   const [newProjectTarget, setNewProjectTarget] = useState(LOWER_MANAGERS[0].email);
   const [newTask, setNewTask] = useState({ title: "", priority: "Medium", dueDate: "" });
-  const [newTaskTarget, setNewTaskTarget] = useState(LOWER_MANAGERS[0].email);
   const [mobile, setMobile] = useState(isMobile());
+  const [confirm, setConfirm] = useState(null);
 
   useEffect(() => {
     const handleResize = () => setMobile(isMobile());
@@ -507,8 +642,9 @@ function AdminDashboard({ user, role }) {
       name: newProjectName.trim(),
       ownerEmail: newProjectTarget.toLowerCase(),
       ownerName: target?.name || newProjectTarget,
-      assignedBy: user.email === SUPER_ADMIN ? "Super Admin" : "Rania Zaki",
+      assignedBy: isSuper ? "Super Admin" : "Rania Zaki",
       assignedByEmail: user.email.toLowerCase(),
+      status: "Pending",
       createdAt: new Date().toISOString().slice(0, 10),
     });
     setNewProjectName(""); setShowNewProject(false);
@@ -516,20 +652,16 @@ function AdminDashboard({ user, role }) {
 
   const createTaskForManager = async () => {
     if (!newTask.title.trim() || !newTaskProject) return;
-    const target = LOWER_MANAGERS.find(m => m.email.toLowerCase() === newTaskTarget.toLowerCase());
     await addDoc(collection(db, "tasks"), {
       ...newTask,
-      projectId: newTaskProject.id,
-      projectName: newTaskProject.name,
-      ownerEmail: newTaskProject.ownerEmail,
-      ownerName: newTaskProject.ownerName,
-      assignedBy: user.email === SUPER_ADMIN ? "Super Admin" : "Rania Zaki",
+      projectId: newTaskProject.id, projectName: newTaskProject.name,
+      ownerEmail: newTaskProject.ownerEmail, ownerName: newTaskProject.ownerName,
+      assignedBy: isSuper ? "Super Admin" : "Rania Zaki",
       assignedByEmail: user.email.toLowerCase(),
       status: "Pending", checklist: [],
       createdAt: new Date().toISOString().slice(0, 10),
     });
-    setNewTask({ title: "", priority: "Medium", dueDate: "" });
-    setNewTaskProject(null);
+    setNewTask({ title: "", priority: "Medium", dueDate: "" }); setNewTaskProject(null);
   };
 
   const updateTask = async (updated) => {
@@ -537,8 +669,72 @@ function AdminDashboard({ user, role }) {
     await updateDoc(doc(db, "tasks", id), { ...data, status: getTaskStatus(updated) });
   };
 
-  const deleteTask = async (id) => await deleteDoc(doc(db, "tasks", id));
+  const markTaskDone = async (task) => {
+    await updateDoc(doc(db, "tasks", task.id), { status: "Done", doneAt: new Date().toISOString() });
+  };
 
+  const reviewTask = (task, action) => {
+    if (action === "approve") {
+      setConfirm({
+        title: "Pass this task?",
+        message: `"${task.title}" will be permanently deleted after passing.`,
+        confirmLabel: "Yes, Pass & Delete",
+        confirmColor: "#22c55e",
+        onConfirm: async () => { await deleteDoc(doc(db, "tasks", task.id)); setConfirm(null); },
+      });
+    } else {
+      setConfirm({
+        title: "Reject this task?",
+        message: `"${task.title}" will be moved back to Pending.`,
+        confirmLabel: "Yes, Reject",
+        confirmColor: "#ef4444",
+        onConfirm: async () => { await updateDoc(doc(db, "tasks", task.id), { status: "Pending" }); setConfirm(null); },
+      });
+    }
+  };
+
+  const reviewProject = (project, action) => {
+    if (action === "approve") {
+      setConfirm({
+        title: "Pass this project?",
+        message: `"${project.name}" and all its tasks will be permanently deleted.`,
+        confirmLabel: "Yes, Pass & Delete",
+        confirmColor: "#22c55e",
+        onConfirm: async () => {
+          const projectTasks = allTasks.filter(t => t.projectId === project.id);
+          await Promise.all(projectTasks.map(t => deleteDoc(doc(db, "tasks", t.id))));
+          await deleteDoc(doc(db, "projects", project.id));
+          setConfirm(null);
+        },
+      });
+    } else {
+      setConfirm({
+        title: "Reject this project?",
+        message: `"${project.name}" will be moved back to Pending.`,
+        confirmLabel: "Yes, Reject",
+        confirmColor: "#ef4444",
+        onConfirm: async () => {
+          await updateDoc(doc(db, "projects", project.id), { status: "Pending" });
+          setConfirm(null);
+        },
+      });
+    }
+  };
+
+  const markProjectDone = (project) => {
+    setConfirm({
+      title: "Mark Project as Done?",
+      message: `"${project.name}" will be marked as done and sent for review.`,
+      confirmLabel: "Yes, Mark Done",
+      confirmColor: "#22c55e",
+      onConfirm: async () => {
+        await updateDoc(doc(db, "projects", project.id), { status: "Done", doneAt: new Date().toISOString() });
+        setConfirm(null);
+      },
+    });
+  };
+
+  const deleteTask = async (id) => await deleteDoc(doc(db, "tasks", id));
   const deleteProject = async (id) => {
     const projectTasks = allTasks.filter(t => t.projectId === id);
     await Promise.all(projectTasks.map(t => deleteDoc(doc(db, "tasks", t.id))));
@@ -547,6 +743,7 @@ function AdminDashboard({ user, role }) {
 
   const totalDone = allTasks.filter(t => getTaskStatus(t) === "Done").length;
   const totalOverdue = allTasks.filter(t => getTaskStatus(t) === "Overdue").length;
+  const totalReview = allProjects.filter(p => p.status === "Done").length + allTasks.filter(t => getTaskStatus(t) === "Done").length;
 
   const inputStyle = { background: "#0a1120", border: "1px solid #1e3a5f", borderRadius: "8px", color: "#e2e8f0", padding: "8px 12px", fontSize: "13px", width: "100%", outline: "none", fontFamily: "'Sora',sans-serif", boxSizing: "border-box" };
   const labelStyle = { color: "#64748b", fontSize: "11px", letterSpacing: "0.8px", textTransform: "uppercase", marginBottom: "6px", display: "block" };
@@ -570,12 +767,11 @@ function AdminDashboard({ user, role }) {
       </div>
 
       <div style={{ maxWidth: "1280px", margin: "0 auto", padding: mobile ? "16px" : "24px 32px" }}>
-        {/* Stats */}
         <div style={{ display: "grid", gridTemplateColumns: "repeat(2,1fr)", gap: "10px", marginBottom: "20px" }}>
           {[
             { label: "Total Projects", value: allProjects.length, color: "#3b82f6", icon: "📁" },
             { label: "Total Tasks", value: allTasks.length, color: "#a855f7", icon: "📋" },
-            { label: "Done", value: totalDone, color: "#22c55e", icon: "✅" },
+            { label: "Done (Tasks)", value: totalDone, color: "#22c55e", icon: "✅" },
             { label: "Overdue", value: totalOverdue, color: "#ef4444", icon: "🔴" },
           ].map(s => (
             <div key={s.label} style={{ background: "linear-gradient(135deg,#0f1724,#111e30)", border: "1px solid #1e3a5f", borderRadius: "12px", padding: "14px", display: "flex", alignItems: "center", gap: "12px" }}>
@@ -585,7 +781,16 @@ function AdminDashboard({ user, role }) {
           ))}
         </div>
 
-        {/* Manager Dropdown */}
+        {totalReview > 0 && (
+          <div style={{ background: "#1a0a28", border: "1px solid #6b21a8", borderRadius: "12px", padding: "14px 16px", marginBottom: "16px", display: "flex", alignItems: "center", gap: "12px" }}>
+            <span style={{ fontSize: "20px" }}>🔍</span>
+            <div>
+              <div style={{ color: "#a855f7", fontWeight: 700, fontSize: "13px" }}>{totalReview} item{totalReview > 1 ? "s" : ""} waiting for your review</div>
+              <div style={{ color: "#64748b", fontSize: "11px", marginTop: "2px" }}>Tasks and projects marked as done are waiting to be passed or rejected</div>
+            </div>
+          </div>
+        )}
+
         <div style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "20px", flexWrap: "wrap" }}>
           <span style={{ color: "#64748b", fontSize: "11px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "1px" }}>View Manager:</span>
           <select value={selectedManagerEmail} onChange={e => setSelectedManagerEmail(e.target.value)}
@@ -595,7 +800,6 @@ function AdminDashboard({ user, role }) {
           </select>
         </div>
 
-        {/* Projects */}
         {filteredProjects.length === 0 ? (
           <div style={{ textAlign: "center", padding: "80px", color: "#475569" }}>
             <div style={{ fontSize: "56px" }}>📭</div>
@@ -605,13 +809,14 @@ function AdminDashboard({ user, role }) {
           filteredProjects.map(project => (
             <ProjectSection key={project.id} project={project} tasks={allTasks}
               onSelectTask={setSelectedTask} onDeleteProject={deleteProject}
-              onAddTask={(p) => { setNewTaskProject(p); setNewTaskTarget(p.ownerEmail || LOWER_MANAGERS[0].email); }}
+              onAddTask={(p) => { setNewTaskProject(p); }}
+              onMarkProjectDone={markProjectDone}
+              onReviewProject={reviewProject}
               currentUserEmail={user.email} mobile={mobile} />
           ))
         )}
       </div>
 
-      {/* New Project Modal */}
       {showNewProject && (
         <Modal title="Assign New Project" onClose={() => setShowNewProject(false)}>
           <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
@@ -621,17 +826,16 @@ function AdminDashboard({ user, role }) {
               </select></div>
             <div><label style={labelStyle}>Project Name</label>
               <input style={inputStyle} placeholder="Enter project name..." value={newProjectName} onChange={e => setNewProjectName(e.target.value)} onKeyDown={e => e.key === "Enter" && createProjectForManager()} autoFocus /></div>
-            <button onClick={createProjectForManager} style={{ background: `linear-gradient(135deg,${isSuper ? "#7c3aed,#a855f7" : "#f97316,#ea580c"})`, color: "#fff", border: "none", borderRadius: "10px", padding: "12px", cursor: "pointer", fontWeight: 700, fontSize: "14px" }}>Create & Assign Project</button>
+            <button onClick={createProjectForManager} style={{ background: `linear-gradient(135deg,${isSuper ? "#7c3aed,#a855f7" : "#f97316,#ea580c"})`, color: "#fff", border: "none", borderRadius: "10px", padding: "12px", cursor: "pointer", fontWeight: 700, fontSize: "14px" }}>Create & Assign</button>
           </div>
         </Modal>
       )}
 
-      {/* New Task Modal */}
       {newTaskProject && (
         <Modal title={`Add Task — ${newTaskProject.name}`} onClose={() => setNewTaskProject(null)}>
           <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
             <div style={{ background: "#0a1120", borderRadius: "8px", padding: "10px 12px", border: "1px solid #1e3a5f", fontSize: "12px", color: "#64748b" }}>
-              📁 Project: <span style={{ color: "#3b82f6", fontWeight: 600 }}>{newTaskProject.name}</span> · 👤 <span style={{ color: "#94a3b8" }}>{newTaskProject.ownerName}</span>
+              📁 <span style={{ color: "#3b82f6", fontWeight: 600 }}>{newTaskProject.name}</span> · 👤 <span style={{ color: "#94a3b8" }}>{newTaskProject.ownerName}</span>
             </div>
             <div><label style={labelStyle}>Task Title</label>
               <input style={inputStyle} placeholder="Enter task title..." value={newTask.title} onChange={e => setNewTask(t => ({ ...t, title: e.target.value }))} autoFocus /></div>
@@ -648,7 +852,18 @@ function AdminDashboard({ user, role }) {
         </Modal>
       )}
 
-      {selectedTask && <TaskDetail task={selectedTask} onClose={() => setSelectedTask(null)} onUpdate={updateTask} onDelete={deleteTask} currentUserEmail={user.email} />}
+      {selectedTask && (
+        <TaskDetail task={selectedTask} onClose={() => setSelectedTask(null)}
+          onUpdate={updateTask} onDelete={deleteTask}
+          onMarkDone={markTaskDone} onReview={reviewTask}
+          currentUserEmail={user.email} />
+      )}
+
+      {confirm && (
+        <ConfirmModal title={confirm.title} message={confirm.message}
+          confirmLabel={confirm.confirmLabel} confirmColor={confirm.confirmColor}
+          onConfirm={confirm.onConfirm} onCancel={() => setConfirm(null)} />
+      )}
     </div>
   );
 }
