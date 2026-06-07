@@ -201,7 +201,11 @@ function TaskCard({ task, onOpen, onMarkDone, onReview, currentUserEmail }) {
         </div>
         <div style={{ color: "#e2e8f0", fontWeight: 600, fontSize: "13px", marginBottom: "8px", lineHeight: 1.4 }}>{task.title}</div>
         {task.dueDate && <div style={{ color: status === "Overdue" ? "#ef4444" : "#64748b", fontSize: "11px", marginBottom: "6px" }}>📅 {task.dueDate}</div>}
-        {task.assignedBy && <div style={{ color: "#475569", fontSize: "10px", marginBottom: "8px" }}>📌 by {task.assignedBy}</div>}
+        {task.assignedBy && <div style={{ color: "#475569", fontSize: "10px", marginBottom: "4px" }}>📌 by {task.assignedBy}</div>}
+        {/* Show which owner this task belongs to (only visible to admins in multi-owner projects) */}
+        {task.ownerName && isAdmin && (
+          <div style={{ color: "#475569", fontSize: "10px", marginBottom: "8px" }}>👤 {task.ownerName}</div>
+        )}
         {total > 0 && (
           <div style={{ marginBottom: "10px" }}>
             <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "4px" }}>
@@ -341,26 +345,47 @@ function TaskDetail({ task, onClose, onUpdate, onDelete, onMarkDone, onReview, c
 }
 
 // ─── PROJECT SECTION ──────────────────────────────────────────────────────────
+// For a multi-owner project, ownerEmails is an array of emails.
+// Each owner only sees their own tasks; admins see all tasks.
 function ProjectSection({ project, tasks, onSelectTask, onDeleteProject, onAddTask, onMarkProjectDone, onReviewProject, currentUserEmail, mobile }) {
   const role = getRole(currentUserEmail);
   const isAdmin = role === "superadmin" || role === "head";
-  const isOwner = project.ownerEmail?.toLowerCase() === currentUserEmail?.toLowerCase();
-  const isAssignedByMe = project.assignedByEmail?.toLowerCase() === currentUserEmail?.toLowerCase();
+
+  // Support both legacy single-owner (ownerEmail string) and new multi-owner (ownerEmails array)
+  const ownerEmails = project.ownerEmails
+    ? project.ownerEmails.map(e => e.toLowerCase())
+    : (project.ownerEmail ? [project.ownerEmail.toLowerCase()] : []);
+
+  const isOwner = ownerEmails.includes(currentUserEmail?.toLowerCase());
   const canDeleteProject = isAdmin || (isOwner && !project.assignedBy);
   const canAddTask = isAdmin || isOwner;
 
-  const ptasks = tasks.filter(t => t.projectId === project.id);
-  const done = ptasks.filter(t => getTaskStatus(t) === "Done").length;
-  const overdue = ptasks.filter(t => getTaskStatus(t) === "Overdue").length;
-  const pending = ptasks.filter(t => getTaskStatus(t) === "Pending").length;
-  const underReview = ptasks.filter(t => getTaskStatus(t) === "Under Review").length;
-  const pct = ptasks.length ? Math.round((done / ptasks.length) * 100) : 0;
+  // Filter tasks for this project
+  const allProjectTasks = tasks.filter(t => t.projectId === project.id);
+
+  // Owners only see their own tasks; admins see everything
+  const visibleTasks = isAdmin
+    ? allProjectTasks
+    : allProjectTasks.filter(t => t.ownerEmail?.toLowerCase() === currentUserEmail?.toLowerCase());
+
+  // Stats always computed from all tasks (admins) or visible tasks (owners)
+  const statTasks = isAdmin ? allProjectTasks : visibleTasks;
+  const done = statTasks.filter(t => getTaskStatus(t) === "Done").length;
+  const overdue = statTasks.filter(t => getTaskStatus(t) === "Overdue").length;
+  const pending = statTasks.filter(t => getTaskStatus(t) === "Pending").length;
+  const underReview = statTasks.filter(t => getTaskStatus(t) === "Under Review").length;
+  const pct = statTasks.length ? Math.round((done / statTasks.length) * 100) : 0;
 
   const projectStatus = project.status || "Pending";
   const canMarkProjectDone = (isAdmin || isOwner) && projectStatus === "Pending";
   const canReviewProject = isAdmin && projectStatus === "Done";
 
   const borderColor = projectStatus === "Done" ? "#14532d" : projectStatus === "Under Review" ? "#6b21a8" : "#1e3a5f";
+
+  // Build owner display names for multi-owner projects
+  const ownerNames = project.ownerNames
+    ? project.ownerNames
+    : (project.ownerName ? [project.ownerName] : ownerEmails);
 
   return (
     <div style={{ background: "linear-gradient(135deg,#0f1724,#111e30)", border: `1px solid ${borderColor}`, borderRadius: "16px", padding: "20px", marginBottom: "16px" }}>
@@ -370,10 +395,14 @@ function ProjectSection({ project, tasks, onSelectTask, onDeleteProject, onAddTa
             <div style={{ fontSize: "16px", fontWeight: 800, color: "#f1f5f9" }}>{project.name}</div>
             <span style={{ color: STATUS_COLORS[projectStatus] || "#64748b", background: (STATUS_COLORS[projectStatus] || "#64748b") + "18", padding: "3px 10px", borderRadius: "20px", fontSize: "10px", fontWeight: 700, border: `1px solid ${(STATUS_COLORS[projectStatus] || "#64748b")}30` }}>● {projectStatus}</span>
           </div>
-          <div style={{ fontSize: "11px", color: "#64748b", marginTop: "4px" }}>
-            {project.ownerName && `👤 ${project.ownerName}`}
+          <div style={{ fontSize: "11px", color: "#64748b", marginTop: "4px", display: "flex", flexWrap: "wrap", gap: "4px", alignItems: "center" }}>
+            {ownerNames.length > 0 && (
+              <span>
+                👤 {ownerNames.join(" · ")}
+              </span>
+            )}
             {project.assignedBy && <span style={{ color: "#3b82f6" }}> · 📌 by {project.assignedBy}</span>}
-            {project.createdAt && ` · 📅 ${project.createdAt}`}
+            {project.createdAt && <span> · 📅 {project.createdAt}</span>}
           </div>
         </div>
         <div style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>
@@ -417,31 +446,64 @@ function ProjectSection({ project, tasks, onSelectTask, onDeleteProject, onAddTa
 
       <div style={{ marginBottom: "14px" }}>
         <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "5px" }}>
-          <span style={{ color: "#94a3b8", fontSize: "11px" }}>Progress</span>
-          <span style={{ color: "#94a3b8", fontSize: "11px" }}>{pct}% · {ptasks.length} tasks</span>
+          <span style={{ color: "#94a3b8", fontSize: "11px" }}>Progress{!isAdmin ? " (your tasks)" : ""}</span>
+          <span style={{ color: "#94a3b8", fontSize: "11px" }}>{pct}% · {statTasks.length} task{statTasks.length !== 1 ? "s" : ""}</span>
         </div>
         <div style={{ background: "#1e3a5f", borderRadius: "99px", height: "6px" }}>
           <div style={{ width: `${pct}%`, height: "6px", borderRadius: "99px", background: pct === 100 ? "#22c55e" : "linear-gradient(90deg,#3b82f6,#60a5fa)", transition: "width 0.4s" }} />
         </div>
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: mobile ? "1fr" : "repeat(auto-fill,minmax(220px,1fr))", gap: "8px" }}>
-        {ptasks.map(t => (
-          <TaskCard key={t.id} task={t} onOpen={onSelectTask}
-            onMarkDone={async (task) => {
-              await updateDoc(doc(db, "tasks", task.id), { status: "Done", doneAt: new Date().toISOString() });
-            }}
-            onReview={async (task, action) => {
-              if (action === "approve") await deleteDoc(doc(db, "tasks", task.id));
-              else await updateDoc(doc(db, "tasks", task.id), { status: "Pending" });
-            }}
-            currentUserEmail={currentUserEmail}
-          />
-        ))}
-        {ptasks.length === 0 && (
-          <div style={{ color: "#334155", fontSize: "12px", padding: "20px", textAlign: "center", border: "2px dashed #1e3a5f", borderRadius: "10px" }}>No tasks yet</div>
-        )}
-      </div>
+      {/* For admins on multi-owner projects, group tasks by owner */}
+      {isAdmin && ownerNames.length > 1 ? (
+        ownerEmails.map((ownerEmail, idx) => {
+          const ownerTasks = visibleTasks.filter(t => t.ownerEmail?.toLowerCase() === ownerEmail);
+          const ownerName = ownerNames[idx] || ownerEmail;
+          return (
+            <div key={ownerEmail} style={{ marginBottom: "14px" }}>
+              <div style={{ fontSize: "11px", fontWeight: 700, color: "#3b82f6", textTransform: "uppercase", letterSpacing: "1px", marginBottom: "8px", display: "flex", alignItems: "center", gap: "6px" }}>
+                <span>👤</span> {ownerName}
+                <span style={{ color: "#334155", fontWeight: 400, textTransform: "none", letterSpacing: 0 }}>· {ownerTasks.length} task{ownerTasks.length !== 1 ? "s" : ""}</span>
+              </div>
+              <div style={{ display: "grid", gridTemplateColumns: mobile ? "1fr" : "repeat(auto-fill,minmax(220px,1fr))", gap: "8px" }}>
+                {ownerTasks.map(t => (
+                  <TaskCard key={t.id} task={t} onOpen={onSelectTask}
+                    onMarkDone={async (task) => {
+                      await updateDoc(doc(db, "tasks", task.id), { status: "Done", doneAt: new Date().toISOString() });
+                    }}
+                    onReview={async (task, action) => {
+                      if (action === "approve") await deleteDoc(doc(db, "tasks", task.id));
+                      else await updateDoc(doc(db, "tasks", task.id), { status: "Pending" });
+                    }}
+                    currentUserEmail={currentUserEmail}
+                  />
+                ))}
+                {ownerTasks.length === 0 && (
+                  <div style={{ color: "#334155", fontSize: "12px", padding: "14px", textAlign: "center", border: "2px dashed #1e3a5f", borderRadius: "10px" }}>No tasks for this owner</div>
+                )}
+              </div>
+            </div>
+          );
+        })
+      ) : (
+        <div style={{ display: "grid", gridTemplateColumns: mobile ? "1fr" : "repeat(auto-fill,minmax(220px,1fr))", gap: "8px" }}>
+          {visibleTasks.map(t => (
+            <TaskCard key={t.id} task={t} onOpen={onSelectTask}
+              onMarkDone={async (task) => {
+                await updateDoc(doc(db, "tasks", task.id), { status: "Done", doneAt: new Date().toISOString() });
+              }}
+              onReview={async (task, action) => {
+                if (action === "approve") await deleteDoc(doc(db, "tasks", task.id));
+                else await updateDoc(doc(db, "tasks", task.id), { status: "Pending" });
+              }}
+              currentUserEmail={currentUserEmail}
+            />
+          ))}
+          {visibleTasks.length === 0 && (
+            <div style={{ color: "#334155", fontSize: "12px", padding: "20px", textAlign: "center", border: "2px dashed #1e3a5f", borderRadius: "10px" }}>No tasks yet</div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -461,11 +523,26 @@ function ManagerDashboard({ user, userProfile }) {
   useEffect(() => {
     const handleResize = () => setMobile(isMobile());
     window.addEventListener("resize", handleResize);
-    const q1 = query(collection(db, "projects"), where("ownerEmail", "==", user.email.toLowerCase()));
-    const unsub1 = onSnapshot(q1, snap => setProjects(snap.docs.map(d => ({ id: d.id, ...d.data() }))));
+
+    // Listen to projects where this owner is in ownerEmails array OR legacy ownerEmail
+    const q1a = query(collection(db, "projects"), where("ownerEmails", "array-contains", user.email.toLowerCase()));
+    const q1b = query(collection(db, "projects"), where("ownerEmail", "==", user.email.toLowerCase()));
+
+    const projectMap = new Map();
+    const unsub1a = onSnapshot(q1a, snap => {
+      snap.docs.forEach(d => projectMap.set(d.id, { id: d.id, ...d.data() }));
+      setProjects(Array.from(projectMap.values()));
+    });
+    const unsub1b = onSnapshot(q1b, snap => {
+      snap.docs.forEach(d => { if (!projectMap.has(d.id)) projectMap.set(d.id, { id: d.id, ...d.data() }); });
+      setProjects(Array.from(projectMap.values()));
+    });
+
+    // Tasks: owner only sees tasks assigned to them
     const q2 = query(collection(db, "tasks"), where("ownerEmail", "==", user.email.toLowerCase()));
     const unsub2 = onSnapshot(q2, snap => setTasks(snap.docs.map(d => ({ id: d.id, ...d.data() }))));
-    return () => { unsub1(); unsub2(); window.removeEventListener("resize", handleResize); };
+
+    return () => { unsub1a(); unsub1b(); unsub2(); window.removeEventListener("resize", handleResize); };
   }, [user.email]);
 
   const createProject = async () => {
@@ -474,6 +551,8 @@ function ManagerDashboard({ user, userProfile }) {
       name: newProjectName.trim(), ownerUid: user.uid,
       ownerName: userProfile?.name || user.email,
       ownerEmail: user.email.toLowerCase(),
+      ownerEmails: [user.email.toLowerCase()],
+      ownerNames: [userProfile?.name || user.email],
       status: "Pending",
       createdAt: new Date().toISOString().slice(0, 10),
     });
@@ -610,12 +689,15 @@ function ManagerDashboard({ user, userProfile }) {
 function AdminDashboard({ user, role }) {
   const [allProjects, setAllProjects] = useState([]);
   const [allTasks, setAllTasks] = useState([]);
-  const [selectedManagerEmail, setSelectedManagerEmail] = useState("all");
+  const [selectedOwnerEmail, setSelectedOwnerEmail] = useState("all");
   const [selectedTask, setSelectedTask] = useState(null);
   const [showNewProject, setShowNewProject] = useState(false);
   const [newTaskProject, setNewTaskProject] = useState(null);
+  // For new task: which owner within the project to assign to
+  const [newTaskOwnerEmail, setNewTaskOwnerEmail] = useState("");
   const [newProjectName, setNewProjectName] = useState("");
-  const [newProjectTarget, setNewProjectTarget] = useState(LOWER_MANAGERS[0].email);
+  // Multi-owner: array of selected owner emails
+  const [selectedOwners, setSelectedOwners] = useState([LOWER_MANAGERS[0].email]);
   const [newTask, setNewTask] = useState({ title: "", priority: "Medium", dueDate: "" });
   const [mobile, setMobile] = useState(isMobile());
   const [confirm, setConfirm] = useState(null);
@@ -631,37 +713,70 @@ function AdminDashboard({ user, role }) {
   const isSuper = role === "superadmin";
   const accentColor = isSuper ? "#a855f7" : "#f97316";
 
-  const filteredProjects = selectedManagerEmail === "all"
+  // Filter projects by selected owner
+  const filteredProjects = selectedOwnerEmail === "all"
     ? allProjects
-    : allProjects.filter(p => p.ownerEmail?.toLowerCase() === selectedManagerEmail.toLowerCase());
+    : allProjects.filter(p => {
+        const emails = p.ownerEmails
+          ? p.ownerEmails.map(e => e.toLowerCase())
+          : (p.ownerEmail ? [p.ownerEmail.toLowerCase()] : []);
+        return emails.includes(selectedOwnerEmail.toLowerCase());
+      });
 
-  const createProjectForManager = async () => {
-    if (!newProjectName.trim()) return;
-    const target = LOWER_MANAGERS.find(m => m.email.toLowerCase() === newProjectTarget.toLowerCase());
+  // Toggle owner selection in the multi-owner picker
+  const toggleOwner = (email) => {
+    setSelectedOwners(prev =>
+      prev.includes(email) ? prev.filter(e => e !== email) : [...prev, email]
+    );
+  };
+
+  const createProjectForOwners = async () => {
+    if (!newProjectName.trim() || selectedOwners.length === 0) return;
+    const ownerDetails = selectedOwners.map(email => {
+      const found = LOWER_MANAGERS.find(m => m.email.toLowerCase() === email.toLowerCase());
+      return { email: email.toLowerCase(), name: found?.name || email };
+    });
     await addDoc(collection(db, "projects"), {
       name: newProjectName.trim(),
-      ownerEmail: newProjectTarget.toLowerCase(),
-      ownerName: target?.name || newProjectTarget,
+      // Legacy single-owner fields (first owner) for backwards compat
+      ownerEmail: ownerDetails[0].email,
+      ownerName: ownerDetails[0].name,
+      // New multi-owner fields
+      ownerEmails: ownerDetails.map(o => o.email),
+      ownerNames: ownerDetails.map(o => o.name),
       assignedBy: isSuper ? "Super Admin" : "Rania Zaki",
       assignedByEmail: user.email.toLowerCase(),
       status: "Pending",
       createdAt: new Date().toISOString().slice(0, 10),
     });
-    setNewProjectName(""); setShowNewProject(false);
+    setNewProjectName(""); setSelectedOwners([LOWER_MANAGERS[0].email]); setShowNewProject(false);
   };
 
-  const createTaskForManager = async () => {
-    if (!newTask.title.trim() || !newTaskProject) return;
+  const createTaskForOwner = async () => {
+    if (!newTask.title.trim() || !newTaskProject || !newTaskOwnerEmail) return;
+    const ownerEmails = newTaskProject.ownerEmails || [newTaskProject.ownerEmail];
+    const ownerNames = newTaskProject.ownerNames || [newTaskProject.ownerName];
+    const ownerIdx = ownerEmails.findIndex(e => e.toLowerCase() === newTaskOwnerEmail.toLowerCase());
+    const ownerName = ownerIdx >= 0 ? ownerNames[ownerIdx] : newTaskOwnerEmail;
+
     await addDoc(collection(db, "tasks"), {
       ...newTask,
       projectId: newTaskProject.id, projectName: newTaskProject.name,
-      ownerEmail: newTaskProject.ownerEmail, ownerName: newTaskProject.ownerName,
+      ownerEmail: newTaskOwnerEmail.toLowerCase(),
+      ownerName,
       assignedBy: isSuper ? "Super Admin" : "Rania Zaki",
       assignedByEmail: user.email.toLowerCase(),
       status: "Pending", checklist: [],
       createdAt: new Date().toISOString().slice(0, 10),
     });
-    setNewTask({ title: "", priority: "Medium", dueDate: "" }); setNewTaskProject(null);
+    setNewTask({ title: "", priority: "Medium", dueDate: "" }); setNewTaskProject(null); setNewTaskOwnerEmail("");
+  };
+
+  // When opening add-task modal, pre-select first owner
+  const openAddTask = (project) => {
+    const ownerEmails = project.ownerEmails || (project.ownerEmail ? [project.ownerEmail] : []);
+    setNewTaskOwnerEmail(ownerEmails[0] || "");
+    setNewTaskProject(project);
   };
 
   const updateTask = async (updated) => {
@@ -767,6 +882,7 @@ function AdminDashboard({ user, role }) {
       </div>
 
       <div style={{ maxWidth: "1280px", margin: "0 auto", padding: mobile ? "16px" : "24px 32px" }}>
+        {/* Stats */}
         <div style={{ display: "grid", gridTemplateColumns: "repeat(2,1fr)", gap: "10px", marginBottom: "20px" }}>
           {[
             { label: "Total Projects", value: allProjects.length, color: "#3b82f6", icon: "📁" },
@@ -791,11 +907,12 @@ function AdminDashboard({ user, role }) {
           </div>
         )}
 
+        {/* Filter by Owner dropdown */}
         <div style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "20px", flexWrap: "wrap" }}>
-          <span style={{ color: "#64748b", fontSize: "11px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "1px" }}>View Manager:</span>
-          <select value={selectedManagerEmail} onChange={e => setSelectedManagerEmail(e.target.value)}
+          <span style={{ color: "#64748b", fontSize: "11px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "1px" }}>View Owner:</span>
+          <select value={selectedOwnerEmail} onChange={e => setSelectedOwnerEmail(e.target.value)}
             style={{ background: "#0f1724", border: `1px solid ${accentColor}40`, borderRadius: "10px", color: "#e2e8f0", padding: "8px 14px", fontSize: "13px", outline: "none", fontFamily: "'Sora',sans-serif", cursor: "pointer", minWidth: "200px" }}>
-            <option value="all">👥 All Managers</option>
+            <option value="all">👥 All Owners</option>
             {LOWER_MANAGERS.map(m => <option key={m.email} value={m.email}>👤 {m.name}</option>)}
           </select>
         </div>
@@ -809,7 +926,7 @@ function AdminDashboard({ user, role }) {
           filteredProjects.map(project => (
             <ProjectSection key={project.id} project={project} tasks={allTasks}
               onSelectTask={setSelectedTask} onDeleteProject={deleteProject}
-              onAddTask={(p) => { setNewTaskProject(p); }}
+              onAddTask={openAddTask}
               onMarkProjectDone={markProjectDone}
               onReviewProject={reviewProject}
               currentUserEmail={user.email} mobile={mobile} />
@@ -817,26 +934,75 @@ function AdminDashboard({ user, role }) {
         )}
       </div>
 
+      {/* New Project Modal — multi-owner picker */}
       {showNewProject && (
         <Modal title="Assign New Project" onClose={() => setShowNewProject(false)}>
           <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
-            <div><label style={labelStyle}>Assign To</label>
-              <select style={{ ...inputStyle, cursor: "pointer" }} value={newProjectTarget} onChange={e => setNewProjectTarget(e.target.value)}>
-                {LOWER_MANAGERS.map(m => <option key={m.email} value={m.email}>{m.name}</option>)}
-              </select></div>
+            <div>
+              <label style={labelStyle}>Assign To (select one or more owners)</label>
+              <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                {LOWER_MANAGERS.map(m => {
+                  const checked = selectedOwners.includes(m.email);
+                  return (
+                    <div key={m.email}
+                      onClick={() => toggleOwner(m.email)}
+                      style={{ display: "flex", alignItems: "center", gap: "10px", padding: "10px 14px", background: checked ? "#1e3a5f" : "#0a1120", border: `1px solid ${checked ? "#3b82f6" : "#1e3a5f"}`, borderRadius: "8px", cursor: "pointer", transition: "all 0.15s" }}>
+                      <div style={{ width: "18px", height: "18px", borderRadius: "4px", border: `2px solid ${checked ? "#3b82f6" : "#334155"}`, background: checked ? "#3b82f6" : "transparent", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, transition: "all 0.15s" }}>
+                        {checked && <span style={{ color: "#fff", fontSize: "11px", fontWeight: 800 }}>✓</span>}
+                      </div>
+                      <span style={{ color: checked ? "#e2e8f0" : "#94a3b8", fontSize: "13px", fontWeight: checked ? 600 : 400 }}>{m.name}</span>
+                    </div>
+                  );
+                })}
+              </div>
+              {selectedOwners.length === 0 && <div style={{ color: "#ef4444", fontSize: "11px", marginTop: "6px" }}>Please select at least one owner</div>}
+            </div>
             <div><label style={labelStyle}>Project Name</label>
-              <input style={inputStyle} placeholder="Enter project name..." value={newProjectName} onChange={e => setNewProjectName(e.target.value)} onKeyDown={e => e.key === "Enter" && createProjectForManager()} autoFocus /></div>
-            <button onClick={createProjectForManager} style={{ background: `linear-gradient(135deg,${isSuper ? "#7c3aed,#a855f7" : "#f97316,#ea580c"})`, color: "#fff", border: "none", borderRadius: "10px", padding: "12px", cursor: "pointer", fontWeight: 700, fontSize: "14px" }}>Create & Assign</button>
+              <input style={inputStyle} placeholder="Enter project name..." value={newProjectName} onChange={e => setNewProjectName(e.target.value)} onKeyDown={e => e.key === "Enter" && createProjectForOwners()} autoFocus /></div>
+            <button onClick={createProjectForOwners} disabled={selectedOwners.length === 0}
+              style={{ background: `linear-gradient(135deg,${isSuper ? "#7c3aed,#a855f7" : "#f97316,#ea580c"})`, color: "#fff", border: "none", borderRadius: "10px", padding: "12px", cursor: selectedOwners.length === 0 ? "not-allowed" : "pointer", fontWeight: 700, fontSize: "14px", opacity: selectedOwners.length === 0 ? 0.5 : 1 }}>
+              Create & Assign
+            </button>
           </div>
         </Modal>
       )}
 
+      {/* Add Task Modal — with owner picker if multi-owner project */}
       {newTaskProject && (
-        <Modal title={`Add Task — ${newTaskProject.name}`} onClose={() => setNewTaskProject(null)}>
+        <Modal title={`Add Task — ${newTaskProject.name}`} onClose={() => { setNewTaskProject(null); setNewTaskOwnerEmail(""); }}>
           <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
             <div style={{ background: "#0a1120", borderRadius: "8px", padding: "10px 12px", border: "1px solid #1e3a5f", fontSize: "12px", color: "#64748b" }}>
-              📁 <span style={{ color: "#3b82f6", fontWeight: 600 }}>{newTaskProject.name}</span> · 👤 <span style={{ color: "#94a3b8" }}>{newTaskProject.ownerName}</span>
+              📁 <span style={{ color: "#3b82f6", fontWeight: 600 }}>{newTaskProject.name}</span>
             </div>
+
+            {/* Owner picker: show if project has multiple owners */}
+            {(() => {
+              const ownerEmails = newTaskProject.ownerEmails || (newTaskProject.ownerEmail ? [newTaskProject.ownerEmail] : []);
+              const ownerNames = newTaskProject.ownerNames || [newTaskProject.ownerName];
+              if (ownerEmails.length > 1) {
+                return (
+                  <div>
+                    <label style={labelStyle}>Assign Task To</label>
+                    <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+                      {ownerEmails.map((email, idx) => {
+                        const name = ownerNames[idx] || email;
+                        const selected = newTaskOwnerEmail === email;
+                        return (
+                          <div key={email}
+                            onClick={() => setNewTaskOwnerEmail(email)}
+                            style={{ display: "flex", alignItems: "center", gap: "10px", padding: "9px 12px", background: selected ? "#1e3a5f" : "#0a1120", border: `1px solid ${selected ? "#3b82f6" : "#1e3a5f"}`, borderRadius: "8px", cursor: "pointer", transition: "all 0.15s" }}>
+                            <div style={{ width: "16px", height: "16px", borderRadius: "50%", border: `2px solid ${selected ? "#3b82f6" : "#334155"}`, background: selected ? "#3b82f6" : "transparent", flexShrink: 0 }} />
+                            <span style={{ color: selected ? "#e2e8f0" : "#94a3b8", fontSize: "13px", fontWeight: selected ? 600 : 400 }}>👤 {name}</span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              }
+              return null;
+            })()}
+
             <div><label style={labelStyle}>Task Title</label>
               <input style={inputStyle} placeholder="Enter task title..." value={newTask.title} onChange={e => setNewTask(t => ({ ...t, title: e.target.value }))} autoFocus /></div>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
@@ -847,7 +1013,7 @@ function AdminDashboard({ user, role }) {
               <div><label style={labelStyle}>Due Date</label>
                 <input type="date" style={inputStyle} value={newTask.dueDate} onChange={e => setNewTask(t => ({ ...t, dueDate: e.target.value }))} /></div>
             </div>
-            <button onClick={createTaskForManager} style={{ background: `linear-gradient(135deg,${isSuper ? "#7c3aed,#a855f7" : "#f97316,#ea580c"})`, color: "#fff", border: "none", borderRadius: "10px", padding: "12px", cursor: "pointer", fontWeight: 700, fontSize: "14px" }}>Assign Task</button>
+            <button onClick={createTaskForOwner} style={{ background: `linear-gradient(135deg,${isSuper ? "#7c3aed,#a855f7" : "#f97316,#ea580c"})`, color: "#fff", border: "none", borderRadius: "10px", padding: "12px", cursor: "pointer", fontWeight: 700, fontSize: "14px" }}>Assign Task</button>
           </div>
         </Modal>
       )}
