@@ -389,68 +389,73 @@ function ProjectSection({ project, tasks, onSelectTask, onDeleteProject, onAddTa
     : (project.ownerName ? [project.ownerName] : ownerEmails);
 
   return (
-    <div style={{ background: "linear-gradient(135deg,#0f1724,#111e30)", border: `1px solid ${borderColor}`, borderRadius: "16px", padding: "20px", marginBottom: "16px" }}>
+    <div style={{ background: "linear-gradient(135deg,#0f1724,#111e30)", border: `1px solid ${borderColor}`, borderRadius: "16px", padding: "14px 16px", marginBottom: "12px" }}>
 
-      {/* ── Header (always visible) ── */}
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: collapsed ? "0" : "12px", flexWrap: "wrap", gap: "8px" }}>
-        <div style={{ display: "flex", alignItems: "flex-start", gap: "10px", flex: 1, minWidth: 0 }}>
-          {/* Collapse toggle arrow */}
-          <button
-            onClick={() => setCollapsed(c => !c)}
-            style={{ background: "none", border: "none", color: "#475569", cursor: "pointer", fontSize: "13px", padding: "3px 2px", marginTop: "1px", flexShrink: 0, display: "inline-block", transition: "transform 0.2s", transform: collapsed ? "rotate(-90deg)" : "rotate(0deg)" }}
-          >▼</button>
-          <div style={{ minWidth: 0 }}>
-            <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
-              <div style={{ fontSize: "16px", fontWeight: 800, color: "#f1f5f9" }}>{project.name}</div>
-              <span style={{ color: STATUS_COLORS[projectStatus] || "#64748b", background: (STATUS_COLORS[projectStatus] || "#64748b") + "18", padding: "3px 10px", borderRadius: "20px", fontSize: "10px", fontWeight: 700, border: `1px solid ${(STATUS_COLORS[projectStatus] || "#64748b")}30` }}>● {projectStatus}</span>
-            </div>
-            <div style={{ fontSize: "11px", color: "#64748b", marginTop: "4px", display: "flex", flexWrap: "wrap", gap: "4px", alignItems: "center" }}>
-              {ownerNames.length > 0 && <span>👤 {ownerNames.join(" · ")}</span>}
-              {project.assignedBy && <span style={{ color: "#3b82f6" }}> · 📌 by {project.assignedBy}</span>}
-              {project.createdAt && <span> · 📅 {project.createdAt}</span>}
-              {/* Mini summary always shown in collapsed state */}
-              {collapsed && (
-                <span>
-                  {" · "}
-                  <span style={{ color: "#94a3b8" }}>{statTasks.length} task{statTasks.length !== 1 ? "s" : ""}</span>
-                  {done > 0 && <span style={{ color: "#22c55e" }}> · {done} done</span>}
-                  {overdue > 0 && <span style={{ color: "#ef4444" }}> · {overdue} overdue</span>}
-                  {pending > 0 && <span style={{ color: "#facc15" }}> · {pending} pending</span>}
-                </span>
-              )}
-            </div>
+      {/* ── Header row (always visible) ── */}
+      <div style={{ display: "flex", alignItems: "flex-start", gap: "8px" }}>
+
+        {/* Collapse arrow */}
+        <button
+          onClick={() => setCollapsed(c => !c)}
+          style={{ background: "none", border: "none", color: "#475569", cursor: "pointer", fontSize: "12px", padding: "4px 2px", flexShrink: 0, marginTop: "2px", transform: collapsed ? "rotate(-90deg)" : "rotate(0deg)", transition: "transform 0.2s" }}
+        >▼</button>
+
+        {/* Left: name + meta */}
+        <div style={{ flex: 1, minWidth: 0 }}>
+          {/* Name + status on one line */}
+          <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
+            <div style={{ fontSize: "15px", fontWeight: 800, color: "#f1f5f9" }}>{project.name}</div>
+            <span style={{ color: STATUS_COLORS[projectStatus] || "#64748b", background: (STATUS_COLORS[projectStatus] || "#64748b") + "18", padding: "2px 8px", borderRadius: "20px", fontSize: "10px", fontWeight: 700, border: `1px solid ${(STATUS_COLORS[projectStatus] || "#64748b")}30`, whiteSpace: "nowrap" }}>● {projectStatus}</span>
           </div>
+
+          {/* Meta row: owner · by · date — all on one compact line */}
+          <div style={{ fontSize: "11px", color: "#64748b", marginTop: "3px", display: "flex", flexWrap: "wrap", alignItems: "center", gap: "0px", lineHeight: 1.6 }}>
+            {ownerNames.length > 0 && <span style={{ marginRight: "4px" }}>👤 {ownerNames.join(", ")}</span>}
+            {project.assignedBy && <span style={{ color: "#3b82f6", marginRight: "4px" }}>· 📌 {project.assignedBy}</span>}
+            {project.createdAt && <span style={{ marginRight: "4px" }}>· 📅 {project.createdAt}</span>}
+          </div>
+
+          {/* Compact stats summary — only when collapsed */}
+          {collapsed && (
+            <div style={{ display: "flex", flexWrap: "wrap", gap: "6px", marginTop: "5px" }}>
+              <span style={{ fontSize: "10px", fontWeight: 700, color: "#94a3b8", background: "#1e3a5f", padding: "2px 7px", borderRadius: "20px" }}>{statTasks.length} tasks</span>
+              {done > 0 && <span style={{ fontSize: "10px", fontWeight: 700, color: "#22c55e", background: "#14532d30", padding: "2px 7px", borderRadius: "20px" }}>✅ {done} done</span>}
+              {overdue > 0 && <span style={{ fontSize: "10px", fontWeight: 700, color: "#ef4444", background: "#7f1d1d30", padding: "2px 7px", borderRadius: "20px" }}>🔴 {overdue} overdue</span>}
+              {pending > 0 && <span style={{ fontSize: "10px", fontWeight: 700, color: "#facc15", background: "#78350f30", padding: "2px 7px", borderRadius: "20px" }}>⏳ {pending} pending</span>}
+              {underReview > 0 && <span style={{ fontSize: "10px", fontWeight: 700, color: "#a855f7", background: "#6b21a830", padding: "2px 7px", borderRadius: "20px" }}>🔍 {underReview} review</span>}
+            </div>
+          )}
         </div>
 
-        {/* Action buttons */}
-        <div style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>
+        {/* Right: action buttons */}
+        <div style={{ display: "flex", gap: "6px", flexWrap: "wrap", flexShrink: 0 }}>
           {canAddTask && projectStatus === "Pending" && (
-            <button onClick={() => onAddTask(project)} style={{ background: "linear-gradient(135deg,#1d4ed8,#2563eb)", color: "#fff", border: "none", borderRadius: "8px", padding: "7px 12px", cursor: "pointer", fontWeight: 700, fontSize: "11px" }}>+ Task</button>
+            <button onClick={() => onAddTask(project)} style={{ background: "linear-gradient(135deg,#1d4ed8,#2563eb)", color: "#fff", border: "none", borderRadius: "8px", padding: "6px 10px", cursor: "pointer", fontWeight: 700, fontSize: "11px", whiteSpace: "nowrap" }}>+ Task</button>
           )}
           {canMarkProjectDone && (
-            <button onClick={() => onMarkProjectDone(project)} style={{ background: "#14532d", color: "#22c55e", border: "1px solid #22c55e40", borderRadius: "8px", padding: "7px 12px", cursor: "pointer", fontWeight: 700, fontSize: "11px" }}>✅ Mark Done</button>
+            <button onClick={() => onMarkProjectDone(project)} style={{ background: "#14532d", color: "#22c55e", border: "1px solid #22c55e40", borderRadius: "8px", padding: "6px 10px", cursor: "pointer", fontWeight: 700, fontSize: "11px", whiteSpace: "nowrap" }}>✅ Done</button>
           )}
           {canReviewProject && (
             <>
-              <button onClick={() => onReviewProject(project, "approve")} style={{ background: "#14532d", color: "#22c55e", border: "1px solid #22c55e40", borderRadius: "8px", padding: "7px 12px", cursor: "pointer", fontWeight: 700, fontSize: "11px" }}>✅ Pass</button>
-              <button onClick={() => onReviewProject(project, "reject")} style={{ background: "#1a0a0a", color: "#ef4444", border: "1px solid #7f1d1d40", borderRadius: "8px", padding: "7px 12px", cursor: "pointer", fontWeight: 700, fontSize: "11px" }}>❌ Reject</button>
+              <button onClick={() => onReviewProject(project, "approve")} style={{ background: "#14532d", color: "#22c55e", border: "1px solid #22c55e40", borderRadius: "8px", padding: "6px 10px", cursor: "pointer", fontWeight: 700, fontSize: "11px" }}>✅ Pass</button>
+              <button onClick={() => onReviewProject(project, "reject")} style={{ background: "#1a0a0a", color: "#ef4444", border: "1px solid #7f1d1d40", borderRadius: "8px", padding: "6px 10px", cursor: "pointer", fontWeight: 700, fontSize: "11px" }}>❌ Reject</button>
             </>
           )}
           {projectStatus === "Done" && !isAdmin && (
-            <div style={{ background: "#0a1a0a", color: "#22c55e", border: "1px solid #14532d", borderRadius: "8px", padding: "7px 12px", fontSize: "11px", fontWeight: 600 }}>✅ Completed</div>
+            <div style={{ background: "#0a1a0a", color: "#22c55e", border: "1px solid #14532d", borderRadius: "8px", padding: "6px 10px", fontSize: "11px", fontWeight: 600 }}>✅ Done</div>
           )}
           {projectStatus === "Under Review" && (
-            <div style={{ background: "#1a0a28", color: "#a855f7", border: "1px solid #6b21a840", borderRadius: "8px", padding: "7px 12px", fontSize: "11px", fontWeight: 600 }}>🔍 Under Review</div>
+            <div style={{ background: "#1a0a28", color: "#a855f7", border: "1px solid #6b21a840", borderRadius: "8px", padding: "6px 10px", fontSize: "11px", fontWeight: 600 }}>🔍 Review</div>
           )}
           {canDeleteProject && (
-            <button onClick={() => onDeleteProject(project.id)} style={{ background: "#1a0a0a", color: "#ef4444", border: "1px solid #7f1d1d", borderRadius: "8px", padding: "7px 10px", cursor: "pointer", fontSize: "13px" }}>🗑</button>
+            <button onClick={() => onDeleteProject(project.id)} style={{ background: "#1a0a0a", color: "#ef4444", border: "1px solid #7f1d1d", borderRadius: "8px", padding: "6px 9px", cursor: "pointer", fontSize: "13px" }}>🗑</button>
           )}
         </div>
       </div>
 
       {/* ── Collapsible body ── */}
       {!collapsed && (
-        <>
+        <div style={{ marginTop: "14px" }}>
           <div style={{ display: "grid", gridTemplateColumns: `repeat(${underReview > 0 ? 4 : 3},1fr)`, gap: "8px", marginBottom: "14px" }}>
             {[
               { label: "Pending", value: pending, color: "#facc15", icon: "⏳" },
@@ -468,7 +473,7 @@ function ProjectSection({ project, tasks, onSelectTask, onDeleteProject, onAddTa
           <div style={{ marginBottom: "14px" }}>
             <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "5px" }}>
               <span style={{ color: "#94a3b8", fontSize: "11px" }}>Progress{!isAdmin ? " (your tasks)" : ""}</span>
-              <span style={{ color: "#94a3b8", fontSize: "11px" }}>{pct}% · {statTasks.length} task{statTasks.length !== 1 ? "s" : ""}</span>
+              <span style={{ color: "#94a3b8", fontSize: "11px" }}>{pct}% · {statTasks.length} tasks</span>
             </div>
             <div style={{ background: "#1e3a5f", borderRadius: "99px", height: "6px" }}>
               <div style={{ width: `${pct}%`, height: "6px", borderRadius: "99px", background: pct === 100 ? "#22c55e" : "linear-gradient(90deg,#3b82f6,#60a5fa)", transition: "width 0.4s" }} />
@@ -514,7 +519,7 @@ function ProjectSection({ project, tasks, onSelectTask, onDeleteProject, onAddTa
               )}
             </div>
           )}
-        </>
+        </div>
       )}
     </div>
   );
@@ -697,12 +702,180 @@ function ManagerDashboard({ user, userProfile }) {
   );
 }
 
+// ─── OVERDUE PANEL ────────────────────────────────────────────────────────────
+function OverduePanel({ allTasks, allProjects, onClose }) {
+  const [expandedOwner, setExpandedOwner] = useState(null);
+  const [expandedType, setExpandedType] = useState(null);
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  function daysOverdue(dateStr) {
+    if (!dateStr) return 0;
+    const due = new Date(dateStr);
+    due.setHours(0, 0, 0, 0);
+    return Math.floor((today - due) / 86400000);
+  }
+
+  const overdueTasks = allTasks.filter(t => getTaskStatus(t) === "Overdue");
+  const overdueProjects = allProjects.filter(p =>
+    p.status === "Pending" && p.dueDate && new Date(p.dueDate) < today
+  );
+
+  const ownerMap = {};
+  LOWER_MANAGERS.forEach(m => { ownerMap[m.email] = { name: m.name, tasks: [], projects: [] }; });
+  overdueTasks.forEach(t => {
+    const key = t.ownerEmail?.toLowerCase();
+    if (ownerMap[key]) ownerMap[key].tasks.push(t);
+  });
+  overdueProjects.forEach(p => {
+    const emails = p.ownerEmails ? p.ownerEmails : (p.ownerEmail ? [p.ownerEmail] : []);
+    emails.forEach(e => { const key = e.toLowerCase(); if (ownerMap[key]) ownerMap[key].projects.push(p); });
+  });
+
+  const owners = Object.entries(ownerMap).filter(([, v]) => v.tasks.length + v.projects.length > 0);
+
+  return (
+    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.85)", zIndex: 1500, display: "flex", alignItems: "center", justifyContent: "center", padding: "16px", backdropFilter: "blur(4px)" }}>
+      <div style={{ background: "#0f1724", border: "1px solid #7f1d1d", borderRadius: "16px", width: "100%", maxWidth: "560px", maxHeight: "88vh", overflowY: "auto", boxShadow: "0 25px 60px rgba(0,0,0,0.7)" }}>
+        {/* Header */}
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "16px 20px", borderBottom: "1px solid #7f1d1d", position: "sticky", top: 0, background: "#0f1724", zIndex: 10 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+            <span style={{ fontSize: "20px" }}>🔴</span>
+            <div>
+              <div style={{ color: "#ef4444", fontWeight: 800, fontSize: "16px" }}>Overdue Report</div>
+              <div style={{ color: "#64748b", fontSize: "11px", marginTop: "2px" }}>
+                {overdueTasks.length} task{overdueTasks.length !== 1 ? "s" : ""} · {overdueProjects.length} project{overdueProjects.length !== 1 ? "s" : ""}
+              </div>
+            </div>
+          </div>
+          <button onClick={onClose} style={{ background: "none", border: "none", color: "#64748b", cursor: "pointer", fontSize: "20px" }}>✕</button>
+        </div>
+
+        <div style={{ padding: "16px 20px 20px" }}>
+          {owners.length === 0 ? (
+            <div style={{ textAlign: "center", padding: "40px 20px", color: "#475569" }}>
+              <div style={{ fontSize: "40px", marginBottom: "10px" }}>✅</div>
+              <div style={{ fontWeight: 600, fontSize: "14px" }}>No overdue items — all clear!</div>
+            </div>
+          ) : (
+            <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+              {owners.map(([email, { name, tasks, projects }]) => {
+                const isOpen = expandedOwner === email;
+                const total = tasks.length + projects.length;
+                return (
+                  <div key={email} style={{ background: "#0a1120", border: `1px solid ${isOpen ? "#ef444460" : "#1e3a5f"}`, borderRadius: "12px", overflow: "hidden" }}>
+                    {/* Owner row */}
+                    <div onClick={() => { setExpandedOwner(isOpen ? null : email); setExpandedType(null); }}
+                      style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 16px", cursor: "pointer" }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                        <div style={{ width: "32px", height: "32px", borderRadius: "8px", background: "#1a0a0a", border: "1px solid #7f1d1d", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "14px" }}>👤</div>
+                        <div>
+                          <div style={{ color: "#e2e8f0", fontWeight: 700, fontSize: "13px" }}>{name}</div>
+                          <div style={{ fontSize: "11px", marginTop: "2px", display: "flex", gap: "6px" }}>
+                            {tasks.length > 0 && <span style={{ color: "#ef4444" }}>{tasks.length} task{tasks.length !== 1 ? "s" : ""}</span>}
+                            {projects.length > 0 && <span style={{ color: "#f97316" }}>{projects.length} project{projects.length !== 1 ? "s" : ""}</span>}
+                          </div>
+                        </div>
+                      </div>
+                      <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                        <div style={{ background: "#1a0a0a", color: "#ef4444", border: "1px solid #7f1d1d", borderRadius: "20px", padding: "3px 10px", fontSize: "12px", fontWeight: 800 }}>{total}</div>
+                        <span style={{ color: "#475569", fontSize: "12px", display: "inline-block", transform: isOpen ? "rotate(0deg)" : "rotate(-90deg)", transition: "transform 0.2s" }}>▼</span>
+                      </div>
+                    </div>
+
+                    {/* Expanded content */}
+                    {isOpen && (
+                      <div style={{ borderTop: "1px solid #1e3a5f", padding: "12px 16px", display: "flex", flexDirection: "column", gap: "8px" }}>
+
+                        {/* Tasks sub-section */}
+                        {tasks.length > 0 && (
+                          <div>
+                            <div onClick={() => setExpandedType(expandedType === `${email}-tasks` ? null : `${email}-tasks`)}
+                              style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 10px", background: "#0f1724", borderRadius: "8px", cursor: "pointer", marginBottom: "6px", border: "1px solid #1e3a5f" }}>
+                              <span style={{ color: "#ef4444", fontSize: "12px", fontWeight: 700 }}>📋 Overdue Tasks</span>
+                              <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                                <span style={{ background: "#1a0a0a", color: "#ef4444", border: "1px solid #7f1d1d", borderRadius: "20px", padding: "2px 8px", fontSize: "11px", fontWeight: 800 }}>{tasks.length}</span>
+                                <span style={{ color: "#475569", fontSize: "12px", display: "inline-block", transform: expandedType === `${email}-tasks` ? "rotate(0deg)" : "rotate(-90deg)", transition: "transform 0.2s" }}>▼</span>
+                              </div>
+                            </div>
+                            {expandedType === `${email}-tasks` && (
+                              <div style={{ display: "flex", flexDirection: "column", gap: "6px", paddingLeft: "4px" }}>
+                                {tasks.sort((a, b) => daysOverdue(b.dueDate) - daysOverdue(a.dueDate)).map(t => {
+                                  const days = daysOverdue(t.dueDate);
+                                  return (
+                                    <div key={t.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", background: "#0a1120", border: "1px solid #7f1d1d30", borderRadius: "8px", padding: "10px 12px", gap: "10px" }}>
+                                      <div style={{ flex: 1, minWidth: 0 }}>
+                                        <div style={{ color: "#e2e8f0", fontSize: "12px", fontWeight: 600, marginBottom: "4px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{t.title}</div>
+                                        <div style={{ display: "flex", gap: "6px", alignItems: "center", flexWrap: "wrap" }}>
+                                          <span style={{ color: PRIORITY_COLORS[t.priority] || "#facc15", fontSize: "10px", fontWeight: 700, background: (PRIORITY_COLORS[t.priority] || "#facc15") + "18", padding: "2px 6px", borderRadius: "20px" }}>{t.priority || "Medium"}</span>
+                                          {t.projectName && <span style={{ color: "#475569", fontSize: "10px" }}>📁 {t.projectName}</span>}
+                                        </div>
+                                      </div>
+                                      <div style={{ textAlign: "right", flexShrink: 0 }}>
+                                        <div style={{ color: "#ef4444", fontSize: "13px", fontWeight: 800 }}>{days}d</div>
+                                        <div style={{ color: "#64748b", fontSize: "9px" }}>overdue</div>
+                                      </div>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            )}
+                          </div>
+                        )}
+
+                        {/* Projects sub-section */}
+                        {projects.length > 0 && (
+                          <div>
+                            <div onClick={() => setExpandedType(expandedType === `${email}-projects` ? null : `${email}-projects`)}
+                              style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 10px", background: "#0f1724", borderRadius: "8px", cursor: "pointer", marginBottom: "6px", border: "1px solid #1e3a5f" }}>
+                              <span style={{ color: "#f97316", fontSize: "12px", fontWeight: 700 }}>📁 Overdue Projects</span>
+                              <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                                <span style={{ background: "#1a0a0a", color: "#f97316", border: "1px solid #f9731640", borderRadius: "20px", padding: "2px 8px", fontSize: "11px", fontWeight: 800 }}>{projects.length}</span>
+                                <span style={{ color: "#475569", fontSize: "12px", display: "inline-block", transform: expandedType === `${email}-projects` ? "rotate(0deg)" : "rotate(-90deg)", transition: "transform 0.2s" }}>▼</span>
+                              </div>
+                            </div>
+                            {expandedType === `${email}-projects` && (
+                              <div style={{ display: "flex", flexDirection: "column", gap: "6px", paddingLeft: "4px" }}>
+                                {projects.sort((a, b) => daysOverdue(b.dueDate) - daysOverdue(a.dueDate)).map(p => {
+                                  const days = daysOverdue(p.dueDate);
+                                  return (
+                                    <div key={p.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", background: "#0a1120", border: "1px solid #f9731630", borderRadius: "8px", padding: "10px 12px", gap: "10px" }}>
+                                      <div style={{ flex: 1, minWidth: 0 }}>
+                                        <div style={{ color: "#e2e8f0", fontSize: "12px", fontWeight: 600, marginBottom: "4px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.name}</div>
+                                        <div style={{ color: "#475569", fontSize: "10px" }}>📅 Due {p.dueDate}</div>
+                                      </div>
+                                      <div style={{ textAlign: "right", flexShrink: 0 }}>
+                                        <div style={{ color: "#f97316", fontSize: "13px", fontWeight: 800 }}>{days}d</div>
+                                        <div style={{ color: "#64748b", fontSize: "9px" }}>overdue</div>
+                                      </div>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── ADMIN DASHBOARD ──────────────────────────────────────────────────────────
 function AdminDashboard({ user, role }) {
   const [allProjects, setAllProjects] = useState([]);
   const [allTasks, setAllTasks] = useState([]);
   const [selectedOwnerEmail, setSelectedOwnerEmail] = useState("all");
   const [selectedTask, setSelectedTask] = useState(null);
+  const [showOverdue, setShowOverdue] = useState(false);
   const [showNewProject, setShowNewProject] = useState(false);
   const [newTaskProject, setNewTaskProject] = useState(null);
   // For new task: which owner within the project to assign to
@@ -897,14 +1070,18 @@ function AdminDashboard({ user, role }) {
         {/* Stats */}
         <div style={{ display: "grid", gridTemplateColumns: "repeat(2,1fr)", gap: "10px", marginBottom: "20px" }}>
           {[
-            { label: "Total Projects", value: allProjects.length, color: "#3b82f6", icon: "📁" },
-            { label: "Total Tasks", value: allTasks.length, color: "#a855f7", icon: "📋" },
-            { label: "Done (Tasks)", value: totalDone, color: "#22c55e", icon: "✅" },
-            { label: "Overdue", value: totalOverdue, color: "#ef4444", icon: "🔴" },
+            { label: "Total Projects", value: allProjects.length, color: "#3b82f6", icon: "📁", click: null },
+            { label: "Total Tasks", value: allTasks.length, color: "#a855f7", icon: "📋", click: null },
+            { label: "Done (Tasks)", value: totalDone, color: "#22c55e", icon: "✅", click: null },
+            { label: "Overdue", value: totalOverdue, color: "#ef4444", icon: "🔴", click: () => setShowOverdue(true) },
           ].map(s => (
-            <div key={s.label} style={{ background: "linear-gradient(135deg,#0f1724,#111e30)", border: "1px solid #1e3a5f", borderRadius: "12px", padding: "14px", display: "flex", alignItems: "center", gap: "12px" }}>
+            <div key={s.label} onClick={s.click || undefined}
+              style={{ background: "linear-gradient(135deg,#0f1724,#111e30)", border: `1px solid ${s.click ? "#7f1d1d" : "#1e3a5f"}`, borderRadius: "12px", padding: "14px", display: "flex", alignItems: "center", gap: "12px", cursor: s.click ? "pointer" : "default" }}>
               <div style={{ width: "36px", height: "36px", borderRadius: "10px", background: s.color + "18", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "16px" }}>{s.icon}</div>
-              <div><div style={{ fontSize: "22px", fontWeight: 800, color: s.color }}>{s.value}</div><div style={{ fontSize: "10px", color: "#64748b" }}>{s.label}</div></div>
+              <div>
+                <div style={{ fontSize: "22px", fontWeight: 800, color: s.color }}>{s.value}</div>
+                <div style={{ fontSize: "10px", color: "#64748b" }}>{s.label}{s.click ? <span style={{ color: "#ef444470", marginLeft: "4px" }}>↗</span> : ""}</div>
+              </div>
             </div>
           ))}
         </div>
@@ -1041,6 +1218,10 @@ function AdminDashboard({ user, role }) {
         <ConfirmModal title={confirm.title} message={confirm.message}
           confirmLabel={confirm.confirmLabel} confirmColor={confirm.confirmColor}
           onConfirm={confirm.onConfirm} onCancel={() => setConfirm(null)} />
+      )}
+
+      {showOverdue && (
+        <OverduePanel allTasks={allTasks} allProjects={allProjects} onClose={() => setShowOverdue(false)} />
       )}
     </div>
   );
