@@ -11,6 +11,7 @@ import {
   onAuthStateChanged,
   sendPasswordResetEmail
 } from "firebase/auth";
+import * as XLSX from "xlsx";
 
 const SUPER_ADMIN = "mohamed817238@gmail.com";
 const HEAD_MANAGER = "rania.zaki@te.eg";
@@ -47,6 +48,134 @@ function getRole(email) {
   if (e === HEAD_MANAGER.toLowerCase()) return "head";
   if (LOWER_MANAGERS.map(m => m.email.toLowerCase()).includes(e)) return "manager";
   return null;
+}
+
+// ─── EXPORT REPORT ────────────────────────────────────────────────────────────
+function exportReport(projects, tasks) {
+  const wb = XLSX.utils.book_new();
+  const today = new Date().toLocaleDateString("en-GB");
+
+  // ── TASKS SHEET ──
+  const taskRows = [];
+  const pendingOverdueTasks = tasks.filter(t => {
+    const s = getTaskStatus(t);
+    return s === "Pending" || s === "Overdue";
+  });
+
+  // Group by owner
+  const tasksByOwner = {};
+  pendingOverdueTasks.forEach(t => {
+    const owner = t.ownerName || t.ownerEmail || "Unknown";
+    if (!tasksByOwner[owner]) tasksByOwner[owner] = [];
+    tasksByOwner[owner].push(t);
+  });
+
+  Object.entries(tasksByOwner).forEach(([owner, ownerTasks]) => {
+    taskRows.push({ "": `── ${owner} ──`, " ": "", "  ": "", "   ": "", "    ": "", "     ": "", "      ": "" });
+    ownerTasks.forEach(t => {
+      taskRows.push({
+        "Owner": owner,
+        "Project": t.projectName || "-",
+        "Task": t.title || "-",
+        "Priority": t.priority || "-",
+        "Status": getTaskStatus(t),
+        "Due Date": t.dueDate || "-",
+        "Created": t.createdAt || "-",
+      });
+    });
+    taskRows.push({ "Owner": "" });
+  });
+
+  if (taskRows.length === 0) {
+    taskRows.push({ "Owner": "No pending or overdue tasks", "Project": "", "Task": "", "Priority": "", "Status": "", "Due Date": "", "Created": "" });
+  }
+
+  const wsTask = XLSX.utils.json_to_sheet(taskRows);
+  wsTask["!cols"] = [{ wch: 20 }, { wch: 22 }, { wch: 30 }, { wch: 12 }, { wch: 12 }, { wch: 14 }, { wch: 14 }];
+  XLSX.utils.book_append_sheet(wb, wsTask, "Pending Tasks");
+
+  // ── PROJECTS SHEET ──
+  const projectRows = [];
+  const pendingOverdueProjects = projects.filter(p => {
+    const s = p.status || "Pending";
+    if (s === "Pending") {
+      const projectTasks = tasks.filter(t => t.projectId === p.id);
+      const hasOverdue = projectTasks.some(t => getTaskStatus(t) === "Overdue");
+      return true;
+    }
+    return false;
+  });
+
+  const projectsByOwner = {};
+  pendingOverdueProjects.forEach(p => {
+    const owner = p.ownerName || p.ownerEmail || "Unknown";
+    if (!projectsByOwner[owner]) projectsByOwner[owner] = [];
+    projectsByOwner[owner].push(p);
+  });
+
+  Object.entries(projectsByOwner).forEach(([owner, ownerProjects]) => {
+    projectRows.push({ "": `── ${owner} ──`, " ": "", "  ": "", "   ": "", "    ": "", "     ": "" });
+    ownerProjects.forEach(p => {
+      const projectTasks = tasks.filter(t => t.projectId === p.id);
+      const doneTasks = projectTasks.filter(t => getTaskStatus(t) === "Done").length;
+      const overdueTasks = projectTasks.filter(t => getTaskStatus(t) === "Overdue").length;
+      const pendingTasks = projectTasks.filter(t => getTaskStatus(t) === "Pending").length;
+      const pct = projectTasks.length ? Math.round((doneTasks / projectTasks.length) * 100) : 0;
+      projectRows.push({
+        "Owner": owner,
+        "Project Name": p.name || "-",
+        "Total Tasks": projectTasks.length,
+        "Pending Tasks": pendingTasks,
+        "Overdue Tasks": overdueTasks,
+        "Progress %": `${pct}%`,
+        "Created": p.createdAt || "-",
+        "Assigned By": p.assignedBy || "Self",
+      });
+    });
+    projectRows.push({ "Owner": "" });
+  });
+
+  if (projectRows.length === 0) {
+    projectRows.push({ "Owner": "No pending projects", "Project Name": "", "Total Tasks": "", "Pending Tasks": "", "Overdue Tasks": "", "Progress %": "", "Created": "", "Assigned By": "" });
+  }
+
+  const wsProject = XLSX.utils.json_to_sheet(projectRows);
+  wsProject["!cols"] = [{ wch: 20 }, { wch: 25 }, { wch: 14 }, { wch: 14 }, { wch: 14 }, { wch: 12 }, { wch: 14 }, { wch: 16 }];
+  XLSX.utils.book_append_sheet(wb, wsProject, "Pending Projects");
+
+  // ── SUMMARY SHEET ──
+  const summaryRows = [
+    { "WE Telecom Egypt — Pending Report": `Generated: ${today}`, " ": "" },
+    { "WE Telecom Egypt — Pending Report": "", " ": "" },
+    { "WE Telecom Egypt — Pending Report": "TASKS SUMMARY", " ": "" },
+  ];
+
+  LOWER_MANAGERS.forEach(m => {
+    const managerTasks = tasks.filter(t => t.ownerEmail?.toLowerCase() === m.email.toLowerCase());
+    const pending = managerTasks.filter(t => getTaskStatus(t) === "Pending").length;
+    const overdue = managerTasks.filter(t => getTaskStatus(t) === "Overdue").length;
+    summaryRows.push({
+      "WE Telecom Egypt — Pending Report": m.name,
+      " ": `Pending: ${pending} | Overdue: ${overdue} | Total: ${pending + overdue}`,
+    });
+  });
+
+  summaryRows.push({ "WE Telecom Egypt — Pending Report": "", " ": "" });
+  summaryRows.push({ "WE Telecom Egypt — Pending Report": "PROJECTS SUMMARY", " ": "" });
+
+  LOWER_MANAGERS.forEach(m => {
+    const managerProjects = projects.filter(p => p.ownerEmail?.toLowerCase() === m.email.toLowerCase() && (p.status || "Pending") === "Pending");
+    summaryRows.push({
+      "WE Telecom Egypt — Pending Report": m.name,
+      " ": `Pending Projects: ${managerProjects.length}`,
+    });
+  });
+
+  const wsSummary = XLSX.utils.json_to_sheet(summaryRows);
+  wsSummary["!cols"] = [{ wch: 35 }, { wch: 40 }];
+  XLSX.utils.book_append_sheet(wb, wsSummary, "Summary");
+
+  XLSX.writeFile(wb, `WE_Telecom_Pending_Report_${today.replace(/\//g, "-")}.xlsx`);
 }
 
 // ─── AUTH ─────────────────────────────────────────────────────────────────────
@@ -193,7 +322,7 @@ function TaskCard({ task, onOpen, onMarkDone, onReview, currentUserEmail }) {
   const canReview = isAdmin && status === "Done";
 
   return (
-    <div style={{ background: "linear-gradient(135deg,#0f1724,#111e30)", border: `1px solid ${status === "Overdue" ? "#7f1d1d" : status === "Under Review" ? "#6b21a8" : status === "Done" ? "#14532d" : "#1e3a5f"}`, borderRadius: "12px", padding: "14px 16px", transition: "all 0.2s" }}>
+    <div style={{ background: "linear-gradient(135deg,#0f1724,#111e30)", border: `1px solid ${status === "Overdue" ? "#7f1d1d" : status === "Done" ? "#14532d" : "#1e3a5f"}`, borderRadius: "12px", padding: "14px 16px", transition: "all 0.2s" }}>
       <div onClick={() => onOpen(task)} style={{ cursor: "pointer" }}>
         <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "8px" }}>
           <span style={{ color: PRIORITY_COLORS[task.priority] || "#facc15", fontSize: "10px", fontWeight: 700, textTransform: "uppercase", background: (PRIORITY_COLORS[task.priority] || "#facc15") + "18", padding: "3px 8px", borderRadius: "20px" }}>{task.priority || "Medium"}</span>
@@ -214,8 +343,6 @@ function TaskCard({ task, onOpen, onMarkDone, onReview, currentUserEmail }) {
           </div>
         )}
       </div>
-
-      {/* Action Buttons */}
       <div style={{ display: "flex", gap: "6px", marginTop: "8px" }}>
         {canMarkDone && (
           <button onClick={e => { e.stopPropagation(); onMarkDone(task); }}
@@ -224,26 +351,18 @@ function TaskCard({ task, onOpen, onMarkDone, onReview, currentUserEmail }) {
           </button>
         )}
         {status === "Done" && !isAdmin && (
-          <div style={{ flex: 1, background: "#0a1a0a", color: "#22c55e", border: "1px solid #14532d", borderRadius: "8px", padding: "6px", fontSize: "11px", fontWeight: 600, textAlign: "center" }}>
-            ✅ Completed
-          </div>
+          <div style={{ flex: 1, background: "#0a1a0a", color: "#22c55e", border: "1px solid #14532d", borderRadius: "8px", padding: "6px", fontSize: "11px", fontWeight: 600, textAlign: "center" }}>✅ Completed</div>
         )}
         {canReview && (
           <>
             <button onClick={e => { e.stopPropagation(); onReview(task, "approve"); }}
-              style={{ flex: 1, background: "#14532d", color: "#22c55e", border: "1px solid #22c55e40", borderRadius: "8px", padding: "6px", cursor: "pointer", fontSize: "11px", fontWeight: 700 }}>
-              ✅ Pass
-            </button>
+              style={{ flex: 1, background: "#14532d", color: "#22c55e", border: "1px solid #22c55e40", borderRadius: "8px", padding: "6px", cursor: "pointer", fontSize: "11px", fontWeight: 700 }}>✅ Pass</button>
             <button onClick={e => { e.stopPropagation(); onReview(task, "reject"); }}
-              style={{ flex: 1, background: "#1a0a0a", color: "#ef4444", border: "1px solid #7f1d1d40", borderRadius: "8px", padding: "6px", cursor: "pointer", fontSize: "11px", fontWeight: 700 }}>
-              ❌ Reject
-            </button>
+              style={{ flex: 1, background: "#1a0a0a", color: "#ef4444", border: "1px solid #7f1d1d40", borderRadius: "8px", padding: "6px", cursor: "pointer", fontSize: "11px", fontWeight: 700 }}>❌ Reject</button>
           </>
         )}
-        {status === "Under Review" && (
-          <div style={{ flex: 1, background: "#1a0a28", color: "#a855f7", border: "1px solid #6b21a840", borderRadius: "8px", padding: "6px", fontSize: "11px", fontWeight: 600, textAlign: "center" }}>
-            🔍 Under Review
-          </div>
+        {status === "Done" && isAdmin && !canReview && (
+          <div style={{ flex: 1, background: "#0a1a0a", color: "#22c55e", border: "1px solid #14532d", borderRadius: "8px", padding: "6px", fontSize: "11px", fontWeight: 600, textAlign: "center" }}>✅ Done</div>
         )}
       </div>
     </div>
@@ -261,7 +380,7 @@ function TaskDetail({ task, onClose, onUpdate, onDelete, onMarkDone, onReview, c
   const isAssignedByMe = task.assignedByEmail?.toLowerCase() === currentUserEmail?.toLowerCase();
   const canDelete = isAdmin || (isOwner && !task.assignedBy) || isAssignedByMe;
   const canEdit = isAdmin || isOwner;
-  const canMarkDone = (status === "Pending" || status === "Overdue") && (isAdmin || isOwner || task.assignedToEmail?.toLowerCase() === currentUserEmail?.toLowerCase());
+  const canMarkDone = (status === "Pending" || status === "Overdue") && (isAdmin || isOwner);
   const canReview = isAdmin && status === "Done";
 
   const inputStyle = { background: "#0a1120", border: "1px solid #1e3a5f", borderRadius: "8px", color: "#e2e8f0", padding: "8px 12px", fontSize: "13px", width: "100%", outline: "none", fontFamily: "'Sora',sans-serif", boxSizing: "border-box" };
@@ -273,13 +392,10 @@ function TaskDetail({ task, onClose, onUpdate, onDelete, onMarkDone, onReview, c
         <div style={{ textAlign: "center" }}>
           <span style={{ color: STATUS_COLORS[status] || "#64748b", background: (STATUS_COLORS[status] || "#64748b") + "18", padding: "6px 20px", borderRadius: "20px", fontSize: "12px", fontWeight: 700, border: `1px solid ${(STATUS_COLORS[status] || "#64748b")}40` }}>● {status}</span>
         </div>
-
         <div><label style={labelStyle}>Title</label>
-          {canEdit
-            ? <input style={inputStyle} value={localTask.title} onChange={e => setLocalTask(t => ({ ...t, title: e.target.value }))} />
+          {canEdit ? <input style={inputStyle} value={localTask.title} onChange={e => setLocalTask(t => ({ ...t, title: e.target.value }))} />
             : <div style={{ color: "#e2e8f0", fontSize: "14px", fontWeight: 600 }}>{localTask.title}</div>}
         </div>
-
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
           <div><label style={labelStyle}>Priority</label>
             {canEdit
@@ -294,14 +410,12 @@ function TaskDetail({ task, onClose, onUpdate, onDelete, onMarkDone, onReview, c
               : <div style={{ color: "#e2e8f0", fontSize: "13px" }}>{localTask.dueDate || "No date"}</div>}
           </div>
         </div>
-
         {task.assignedBy && (
           <div style={{ background: "#0a1120", borderRadius: "8px", padding: "10px 12px", border: "1px solid #1e3a5f" }}>
             <span style={{ color: "#64748b", fontSize: "11px" }}>📌 Assigned by </span>
             <span style={{ color: "#3b82f6", fontSize: "11px", fontWeight: 600 }}>{task.assignedBy}</span>
           </div>
         )}
-
         <div>
           <label style={labelStyle}>Checklist ({(localTask.checklist || []).filter(c => c.done).length}/{(localTask.checklist || []).length})</label>
           <div style={{ display: "flex", flexDirection: "column", gap: "8px", marginBottom: "10px" }}>
@@ -325,7 +439,6 @@ function TaskDetail({ task, onClose, onUpdate, onDelete, onMarkDone, onReview, c
             </div>
           )}
         </div>
-
         <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
           {canEdit && <button onClick={() => { onUpdate(localTask); onClose(); }} style={{ flex: 1, background: "linear-gradient(135deg,#1d4ed8,#2563eb)", color: "#fff", border: "none", borderRadius: "10px", padding: "11px", cursor: "pointer", fontWeight: 700, fontSize: "13px" }}>Save</button>}
           {canMarkDone && <button onClick={() => { onMarkDone(task); onClose(); }} style={{ flex: 1, background: "#14532d", color: "#22c55e", border: "1px solid #22c55e40", borderRadius: "10px", padding: "11px", cursor: "pointer", fontWeight: 700, fontSize: "13px" }}>✅ Mark Done</button>}
@@ -345,22 +458,18 @@ function ProjectSection({ project, tasks, onSelectTask, onDeleteProject, onAddTa
   const role = getRole(currentUserEmail);
   const isAdmin = role === "superadmin" || role === "head";
   const isOwner = project.ownerEmail?.toLowerCase() === currentUserEmail?.toLowerCase();
-  const isAssignedByMe = project.assignedByEmail?.toLowerCase() === currentUserEmail?.toLowerCase();
   const canDeleteProject = isAdmin || (isOwner && !project.assignedBy);
   const canAddTask = isAdmin || isOwner;
+  const projectStatus = project.status || "Pending";
+  const canMarkProjectDone = (isAdmin || isOwner) && projectStatus === "Pending";
+  const canReviewProject = isAdmin && projectStatus === "Done";
 
   const ptasks = tasks.filter(t => t.projectId === project.id);
   const done = ptasks.filter(t => getTaskStatus(t) === "Done").length;
   const overdue = ptasks.filter(t => getTaskStatus(t) === "Overdue").length;
   const pending = ptasks.filter(t => getTaskStatus(t) === "Pending").length;
-  const underReview = ptasks.filter(t => getTaskStatus(t) === "Under Review").length;
   const pct = ptasks.length ? Math.round((done / ptasks.length) * 100) : 0;
-
-  const projectStatus = project.status || "Pending";
-  const canMarkProjectDone = (isAdmin || isOwner) && projectStatus === "Pending";
-  const canReviewProject = isAdmin && projectStatus === "Done";
-
-  const borderColor = projectStatus === "Done" ? "#14532d" : projectStatus === "Under Review" ? "#6b21a8" : "#1e3a5f";
+  const borderColor = projectStatus === "Done" ? "#14532d" : projectStatus === "Under Review" ? "#6b21a8" : overdue > 0 ? "#7f1d1d" : "#1e3a5f";
 
   return (
     <div style={{ background: "linear-gradient(135deg,#0f1724,#111e30)", border: `1px solid ${borderColor}`, borderRadius: "16px", padding: "20px", marginBottom: "16px" }}>
@@ -368,7 +477,7 @@ function ProjectSection({ project, tasks, onSelectTask, onDeleteProject, onAddTa
         <div>
           <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
             <div style={{ fontSize: "16px", fontWeight: 800, color: "#f1f5f9" }}>{project.name}</div>
-            <span style={{ color: STATUS_COLORS[projectStatus] || "#64748b", background: (STATUS_COLORS[projectStatus] || "#64748b") + "18", padding: "3px 10px", borderRadius: "20px", fontSize: "10px", fontWeight: 700, border: `1px solid ${(STATUS_COLORS[projectStatus] || "#64748b")}30` }}>● {projectStatus}</span>
+            <span style={{ color: STATUS_COLORS[projectStatus] || "#64748b", background: (STATUS_COLORS[projectStatus] || "#64748b") + "18", padding: "3px 10px", borderRadius: "20px", fontSize: "10px", fontWeight: 700 }}>● {projectStatus}</span>
           </div>
           <div style={{ fontSize: "11px", color: "#64748b", marginTop: "4px" }}>
             {project.ownerName && `👤 ${project.ownerName}`}
@@ -392,22 +501,14 @@ function ProjectSection({ project, tasks, onSelectTask, onDeleteProject, onAddTa
           {projectStatus === "Done" && !isAdmin && (
             <div style={{ background: "#0a1a0a", color: "#22c55e", border: "1px solid #14532d", borderRadius: "8px", padding: "7px 12px", fontSize: "11px", fontWeight: 600 }}>✅ Completed</div>
           )}
-          {projectStatus === "Under Review" && (
-            <div style={{ background: "#1a0a28", color: "#a855f7", border: "1px solid #6b21a840", borderRadius: "8px", padding: "7px 12px", fontSize: "11px", fontWeight: 600 }}>🔍 Under Review</div>
-          )}
           {canDeleteProject && (
             <button onClick={() => onDeleteProject(project.id)} style={{ background: "#1a0a0a", color: "#ef4444", border: "1px solid #7f1d1d", borderRadius: "8px", padding: "7px 10px", cursor: "pointer", fontSize: "13px" }}>🗑</button>
           )}
         </div>
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: `repeat(${underReview > 0 ? 4 : 3},1fr)`, gap: "8px", marginBottom: "14px" }}>
-        {[
-          { label: "Pending", value: pending, color: "#facc15", icon: "⏳" },
-          { label: "Done", value: done, color: "#22c55e", icon: "✅" },
-          { label: "Overdue", value: overdue, color: "#ef4444", icon: "🔴" },
-          ...(underReview > 0 ? [{ label: "Review", value: underReview, color: "#a855f7", icon: "🔍" }] : []),
-        ].map(s => (
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: "8px", marginBottom: "14px" }}>
+        {[{ label: "Pending", value: pending, color: "#facc15", icon: "⏳" }, { label: "Done", value: done, color: "#22c55e", icon: "✅" }, { label: "Overdue", value: overdue, color: "#ef4444", icon: "🔴" }].map(s => (
           <div key={s.label} style={{ background: "#0a1120", borderRadius: "10px", padding: "10px", display: "flex", alignItems: "center", gap: "8px", border: "1px solid #1e3a5f" }}>
             <span>{s.icon}</span>
             <div><div style={{ fontSize: "18px", fontWeight: 800, color: s.color }}>{s.value}</div><div style={{ fontSize: "10px", color: "#64748b" }}>{s.label}</div></div>
@@ -428,15 +529,12 @@ function ProjectSection({ project, tasks, onSelectTask, onDeleteProject, onAddTa
       <div style={{ display: "grid", gridTemplateColumns: mobile ? "1fr" : "repeat(auto-fill,minmax(220px,1fr))", gap: "8px" }}>
         {ptasks.map(t => (
           <TaskCard key={t.id} task={t} onOpen={onSelectTask}
-            onMarkDone={async (task) => {
-              await updateDoc(doc(db, "tasks", task.id), { status: "Done", doneAt: new Date().toISOString() });
-            }}
+            onMarkDone={async (task) => { await updateDoc(doc(db, "tasks", task.id), { status: "Done", doneAt: new Date().toISOString() }); }}
             onReview={async (task, action) => {
               if (action === "approve") await deleteDoc(doc(db, "tasks", task.id));
               else await updateDoc(doc(db, "tasks", task.id), { status: "Pending" });
             }}
-            currentUserEmail={currentUserEmail}
-          />
+            currentUserEmail={currentUserEmail} />
         ))}
         {ptasks.length === 0 && (
           <div style={{ color: "#334155", fontSize: "12px", padding: "20px", textAlign: "center", border: "2px dashed #1e3a5f", borderRadius: "10px" }}>No tasks yet</div>
@@ -509,7 +607,8 @@ function ManagerDashboard({ user, userProfile }) {
   const markProjectDone = (project) => {
     setConfirm({
       title: "Mark Project as Done?",
-      message: `Are you sure you want to mark "${project.name}" as done? It will be sent for review.`,
+      message: `"${project.name}" will be marked as done and sent for review.`,
+      confirmLabel: "Yes, Mark Done", confirmColor: "#22c55e",
       onConfirm: async () => {
         await updateDoc(doc(db, "projects", project.id), { status: "Done", doneAt: new Date().toISOString() });
         setConfirm(null);
@@ -599,8 +698,8 @@ function ManagerDashboard({ user, userProfile }) {
 
       {confirm && (
         <ConfirmModal title={confirm.title} message={confirm.message}
-          onConfirm={confirm.onConfirm} onCancel={() => setConfirm(null)}
-          confirmLabel="Yes, Mark Done" confirmColor="#22c55e" />
+          confirmLabel={confirm.confirmLabel} confirmColor={confirm.confirmColor}
+          onConfirm={confirm.onConfirm} onCancel={() => setConfirm(null)} />
       )}
     </div>
   );
@@ -610,7 +709,7 @@ function ManagerDashboard({ user, userProfile }) {
 function AdminDashboard({ user, role }) {
   const [allProjects, setAllProjects] = useState([]);
   const [allTasks, setAllTasks] = useState([]);
-  const [selectedManagerEmail, setSelectedManagerEmail] = useState("all");
+  const [selectedOwnerEmail, setSelectedOwnerEmail] = useState("all");
   const [selectedTask, setSelectedTask] = useState(null);
   const [showNewProject, setShowNewProject] = useState(false);
   const [newTaskProject, setNewTaskProject] = useState(null);
@@ -631,9 +730,9 @@ function AdminDashboard({ user, role }) {
   const isSuper = role === "superadmin";
   const accentColor = isSuper ? "#a855f7" : "#f97316";
 
-  const filteredProjects = selectedManagerEmail === "all"
+  const filteredProjects = selectedOwnerEmail === "all"
     ? allProjects
-    : allProjects.filter(p => p.ownerEmail?.toLowerCase() === selectedManagerEmail.toLowerCase());
+    : allProjects.filter(p => p.ownerEmail?.toLowerCase() === selectedOwnerEmail.toLowerCase());
 
   const createProjectForManager = async () => {
     if (!newProjectName.trim()) return;
@@ -678,16 +777,14 @@ function AdminDashboard({ user, role }) {
       setConfirm({
         title: "Pass this task?",
         message: `"${task.title}" will be permanently deleted after passing.`,
-        confirmLabel: "Yes, Pass & Delete",
-        confirmColor: "#22c55e",
+        confirmLabel: "Yes, Pass & Delete", confirmColor: "#22c55e",
         onConfirm: async () => { await deleteDoc(doc(db, "tasks", task.id)); setConfirm(null); },
       });
     } else {
       setConfirm({
         title: "Reject this task?",
         message: `"${task.title}" will be moved back to Pending.`,
-        confirmLabel: "Yes, Reject",
-        confirmColor: "#ef4444",
+        confirmLabel: "Yes, Reject", confirmColor: "#ef4444",
         onConfirm: async () => { await updateDoc(doc(db, "tasks", task.id), { status: "Pending" }); setConfirm(null); },
       });
     }
@@ -698,8 +795,7 @@ function AdminDashboard({ user, role }) {
       setConfirm({
         title: "Pass this project?",
         message: `"${project.name}" and all its tasks will be permanently deleted.`,
-        confirmLabel: "Yes, Pass & Delete",
-        confirmColor: "#22c55e",
+        confirmLabel: "Yes, Pass & Delete", confirmColor: "#22c55e",
         onConfirm: async () => {
           const projectTasks = allTasks.filter(t => t.projectId === project.id);
           await Promise.all(projectTasks.map(t => deleteDoc(doc(db, "tasks", t.id))));
@@ -711,8 +807,7 @@ function AdminDashboard({ user, role }) {
       setConfirm({
         title: "Reject this project?",
         message: `"${project.name}" will be moved back to Pending.`,
-        confirmLabel: "Yes, Reject",
-        confirmColor: "#ef4444",
+        confirmLabel: "Yes, Reject", confirmColor: "#ef4444",
         onConfirm: async () => {
           await updateDoc(doc(db, "projects", project.id), { status: "Pending" });
           setConfirm(null);
@@ -725,8 +820,7 @@ function AdminDashboard({ user, role }) {
     setConfirm({
       title: "Mark Project as Done?",
       message: `"${project.name}" will be marked as done and sent for review.`,
-      confirmLabel: "Yes, Mark Done",
-      confirmColor: "#22c55e",
+      confirmLabel: "Yes, Mark Done", confirmColor: "#22c55e",
       onConfirm: async () => {
         await updateDoc(doc(db, "projects", project.id), { status: "Done", doneAt: new Date().toISOString() });
         setConfirm(null);
@@ -743,7 +837,8 @@ function AdminDashboard({ user, role }) {
 
   const totalDone = allTasks.filter(t => getTaskStatus(t) === "Done").length;
   const totalOverdue = allTasks.filter(t => getTaskStatus(t) === "Overdue").length;
-  const totalReview = allProjects.filter(p => p.status === "Done").length + allTasks.filter(t => getTaskStatus(t) === "Done").length;
+  const totalPending = allTasks.filter(t => getTaskStatus(t) === "Pending").length;
+  const reviewCount = allProjects.filter(p => p.status === "Done").length + allTasks.filter(t => getTaskStatus(t) === "Done").length;
 
   const inputStyle = { background: "#0a1120", border: "1px solid #1e3a5f", borderRadius: "8px", color: "#e2e8f0", padding: "8px 12px", fontSize: "13px", width: "100%", outline: "none", fontFamily: "'Sora',sans-serif", boxSizing: "border-box" };
   const labelStyle = { color: "#64748b", fontSize: "11px", letterSpacing: "0.8px", textTransform: "uppercase", marginBottom: "6px", display: "block" };
@@ -759,7 +854,11 @@ function AdminDashboard({ user, role }) {
               <div style={{ fontSize: "9px", color: accentColor, letterSpacing: "1px", textTransform: "uppercase" }}>{user.email}</div>
             </div>
           </div>
-          <div style={{ display: "flex", gap: "8px" }}>
+          <div style={{ display: "flex", gap: "6px", flexWrap: "wrap", justifyContent: "flex-end" }}>
+            <button onClick={() => exportReport(allProjects, allTasks)}
+              style={{ background: "linear-gradient(135deg,#14532d,#16a34a)", color: "#fff", border: "none", borderRadius: "8px", padding: "7px 14px", cursor: "pointer", fontWeight: 700, fontSize: "12px" }}>
+              📊 Export Report
+            </button>
             <button onClick={() => setShowNewProject(true)} style={{ background: `linear-gradient(135deg,${isSuper ? "#7c3aed,#a855f7" : "#f97316,#ea580c"})`, color: "#fff", border: "none", borderRadius: "8px", padding: "7px 14px", cursor: "pointer", fontWeight: 700, fontSize: "12px" }}>+ Project</button>
             <button onClick={() => signOut(auth)} style={{ background: "#0f1724", color: "#94a3b8", border: "1px solid #1e3a5f", borderRadius: "8px", padding: "7px 14px", cursor: "pointer", fontSize: "12px" }}>Sign Out</button>
           </div>
@@ -771,8 +870,8 @@ function AdminDashboard({ user, role }) {
           {[
             { label: "Total Projects", value: allProjects.length, color: "#3b82f6", icon: "📁" },
             { label: "Total Tasks", value: allTasks.length, color: "#a855f7", icon: "📋" },
-            { label: "Done (Tasks)", value: totalDone, color: "#22c55e", icon: "✅" },
-            { label: "Overdue", value: totalOverdue, color: "#ef4444", icon: "🔴" },
+            { label: "Pending Tasks", value: totalPending, color: "#facc15", icon: "⏳" },
+            { label: "Overdue Tasks", value: totalOverdue, color: "#ef4444", icon: "🔴" },
           ].map(s => (
             <div key={s.label} style={{ background: "linear-gradient(135deg,#0f1724,#111e30)", border: "1px solid #1e3a5f", borderRadius: "12px", padding: "14px", display: "flex", alignItems: "center", gap: "12px" }}>
               <div style={{ width: "36px", height: "36px", borderRadius: "10px", background: s.color + "18", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "16px" }}>{s.icon}</div>
@@ -781,21 +880,21 @@ function AdminDashboard({ user, role }) {
           ))}
         </div>
 
-        {totalReview > 0 && (
+        {reviewCount > 0 && (
           <div style={{ background: "#1a0a28", border: "1px solid #6b21a8", borderRadius: "12px", padding: "14px 16px", marginBottom: "16px", display: "flex", alignItems: "center", gap: "12px" }}>
             <span style={{ fontSize: "20px" }}>🔍</span>
             <div>
-              <div style={{ color: "#a855f7", fontWeight: 700, fontSize: "13px" }}>{totalReview} item{totalReview > 1 ? "s" : ""} waiting for your review</div>
-              <div style={{ color: "#64748b", fontSize: "11px", marginTop: "2px" }}>Tasks and projects marked as done are waiting to be passed or rejected</div>
+              <div style={{ color: "#a855f7", fontWeight: 700, fontSize: "13px" }}>{reviewCount} item{reviewCount > 1 ? "s" : ""} waiting for your review</div>
+              <div style={{ color: "#64748b", fontSize: "11px", marginTop: "2px" }}>Tasks and projects marked done are waiting to be passed or rejected</div>
             </div>
           </div>
         )}
 
         <div style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "20px", flexWrap: "wrap" }}>
-          <span style={{ color: "#64748b", fontSize: "11px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "1px" }}>View Manager:</span>
-          <select value={selectedManagerEmail} onChange={e => setSelectedManagerEmail(e.target.value)}
+          <span style={{ color: "#64748b", fontSize: "11px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "1px" }}>View Owner:</span>
+          <select value={selectedOwnerEmail} onChange={e => setSelectedOwnerEmail(e.target.value)}
             style={{ background: "#0f1724", border: `1px solid ${accentColor}40`, borderRadius: "10px", color: "#e2e8f0", padding: "8px 14px", fontSize: "13px", outline: "none", fontFamily: "'Sora',sans-serif", cursor: "pointer", minWidth: "200px" }}>
-            <option value="all">👥 All Managers</option>
+            <option value="all">👥 All Owners</option>
             {LOWER_MANAGERS.map(m => <option key={m.email} value={m.email}>👤 {m.name}</option>)}
           </select>
         </div>
@@ -809,7 +908,7 @@ function AdminDashboard({ user, role }) {
           filteredProjects.map(project => (
             <ProjectSection key={project.id} project={project} tasks={allTasks}
               onSelectTask={setSelectedTask} onDeleteProject={deleteProject}
-              onAddTask={(p) => { setNewTaskProject(p); }}
+              onAddTask={(p) => setNewTaskProject(p)}
               onMarkProjectDone={markProjectDone}
               onReviewProject={reviewProject}
               currentUserEmail={user.email} mobile={mobile} />
@@ -897,7 +996,6 @@ export default function App() {
   );
 
   if (!user) return <AuthScreen />;
-
   const role = getRole(user.email);
   if (!role) return (
     <div style={{ minHeight: "100vh", background: "#070d18", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'Sora',sans-serif", flexDirection: "column", gap: "16px" }}>
